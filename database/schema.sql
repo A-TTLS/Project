@@ -3,6 +3,7 @@
 -- Group: A TTLS (UTM Group 1)
 -- Authors: Aloysius Probo (Backend), Lee Hui Zhen (Frontend)
 -- Description: Supports Auth, Meals, Vision AI, Metrics, Social Circles, Gamification
+-- Idempotent: Can safely be run repeatedly without collision errors
 -- ============================================================================
 
 -- Enable required extensions
@@ -217,7 +218,11 @@ BEGIN
     NEW.raw_user_meta_data->>'avatar_url',
     100, -- 100 bonus starting SnapPoints
     1
-  );
+  )
+  ON CONFLICT (id) DO UPDATE SET
+    email = EXCLUDED.email,
+    full_name = COALESCE(EXCLUDED.full_name, public.profiles.full_name),
+    avatar_url = COALESCE(EXCLUDED.avatar_url, public.profiles.avatar_url);
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -231,6 +236,7 @@ CREATE TRIGGER on_auth_user_created
 -- ============================================================================
 -- 10. ROW LEVEL SECURITY (RLS) POLICIES
 -- Strict security policies to ensure users only access their own private data
+-- Each policy has a DROP POLICY IF EXISTS so this script can safely re-run
 -- ============================================================================
 
 -- Enable RLS on all tables
@@ -251,13 +257,13 @@ ALTER TABLE public.daily_missions ENABLE ROW LEVEL SECURITY;
 -- ----------------------------------------------------------------------------
 -- PROFILES POLICIES
 -- ----------------------------------------------------------------------------
--- Any authenticated user can read public profile data (name, handle, streak)
+DROP POLICY IF EXISTS "Public profiles are readable by authenticated users" ON public.profiles;
 CREATE POLICY "Public profiles are readable by authenticated users"
   ON public.profiles FOR SELECT
   TO authenticated
   USING (true);
 
--- Users can only update their own profile
+DROP POLICY IF EXISTS "Users can update their own profile" ON public.profiles;
 CREATE POLICY "Users can update their own profile"
   ON public.profiles FOR UPDATE
   TO authenticated
@@ -266,25 +272,25 @@ CREATE POLICY "Users can update their own profile"
 -- ----------------------------------------------------------------------------
 -- MEALS POLICIES
 -- ----------------------------------------------------------------------------
--- Users can view their own meals OR meals explicitly marked as public
+DROP POLICY IF EXISTS "Users can view own or public meals" ON public.meals;
 CREATE POLICY "Users can view own or public meals"
   ON public.meals FOR SELECT
   TO authenticated
   USING (auth.uid() = user_id OR is_public = true);
 
--- Users can insert their own meals
+DROP POLICY IF EXISTS "Users can insert own meals" ON public.meals;
 CREATE POLICY "Users can insert own meals"
   ON public.meals FOR INSERT
   TO authenticated
   WITH CHECK (auth.uid() = user_id);
 
--- Users can update their own meals
+DROP POLICY IF EXISTS "Users can update own meals" ON public.meals;
 CREATE POLICY "Users can update own meals"
   ON public.meals FOR UPDATE
   TO authenticated
   USING (auth.uid() = user_id);
 
--- Users can delete their own meals
+DROP POLICY IF EXISTS "Users can delete own meals" ON public.meals;
 CREATE POLICY "Users can delete own meals"
   ON public.meals FOR DELETE
   TO authenticated
@@ -293,16 +299,19 @@ CREATE POLICY "Users can delete own meals"
 -- ----------------------------------------------------------------------------
 -- DAILY METRICS POLICIES
 -- ----------------------------------------------------------------------------
+DROP POLICY IF EXISTS "Users can read own daily metrics" ON public.daily_metrics;
 CREATE POLICY "Users can read own daily metrics"
   ON public.daily_metrics FOR SELECT
   TO authenticated
   USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can insert own daily metrics" ON public.daily_metrics;
 CREATE POLICY "Users can insert own daily metrics"
   ON public.daily_metrics FOR INSERT
   TO authenticated
   WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can update own daily metrics" ON public.daily_metrics;
 CREATE POLICY "Users can update own daily metrics"
   ON public.daily_metrics FOR UPDATE
   TO authenticated
@@ -311,48 +320,57 @@ CREATE POLICY "Users can update own daily metrics"
 -- ----------------------------------------------------------------------------
 -- SOCIAL POSTS, LIKES, COMMENTS POLICIES
 -- ----------------------------------------------------------------------------
+DROP POLICY IF EXISTS "Public posts are viewable by all authenticated users" ON public.social_posts;
 CREATE POLICY "Public posts are viewable by all authenticated users"
   ON public.social_posts FOR SELECT
   TO authenticated
   USING (visibility = 'public' OR auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can create their own posts" ON public.social_posts;
 CREATE POLICY "Users can create their own posts"
   ON public.social_posts FOR INSERT
   TO authenticated
   WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can delete their own posts" ON public.social_posts;
 CREATE POLICY "Users can delete their own posts"
   ON public.social_posts FOR DELETE
   TO authenticated
   USING (auth.uid() = user_id);
 
 -- Post Likes
+DROP POLICY IF EXISTS "Likes are viewable by authenticated users" ON public.post_likes;
 CREATE POLICY "Likes are viewable by authenticated users"
   ON public.post_likes FOR SELECT
   TO authenticated
   USING (true);
 
+DROP POLICY IF EXISTS "Users can toggle their own like" ON public.post_likes;
 CREATE POLICY "Users can toggle their own like"
   ON public.post_likes FOR INSERT
   TO authenticated
   WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can remove their own like" ON public.post_likes;
 CREATE POLICY "Users can remove their own like"
   ON public.post_likes FOR DELETE
   TO authenticated
   USING (auth.uid() = user_id);
 
 -- Post Comments
+DROP POLICY IF EXISTS "Comments are viewable by authenticated users" ON public.post_comments;
 CREATE POLICY "Comments are viewable by authenticated users"
   ON public.post_comments FOR SELECT
   TO authenticated
   USING (true);
 
+DROP POLICY IF EXISTS "Users can post comments" ON public.post_comments;
 CREATE POLICY "Users can post comments"
   ON public.post_comments FOR INSERT
   TO authenticated
   WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can delete own comments" ON public.post_comments;
 CREATE POLICY "Users can delete own comments"
   ON public.post_comments FOR DELETE
   TO authenticated
@@ -361,16 +379,19 @@ CREATE POLICY "Users can delete own comments"
 -- ----------------------------------------------------------------------------
 -- FOLLOWS POLICIES
 -- ----------------------------------------------------------------------------
+DROP POLICY IF EXISTS "Follows are viewable by authenticated users" ON public.follows;
 CREATE POLICY "Follows are viewable by authenticated users"
   ON public.follows FOR SELECT
   TO authenticated
   USING (true);
 
+DROP POLICY IF EXISTS "Users can follow others" ON public.follows;
 CREATE POLICY "Users can follow others"
   ON public.follows FOR INSERT
   TO authenticated
   WITH CHECK (auth.uid() = follower_id);
 
+DROP POLICY IF EXISTS "Users can unfollow" ON public.follows;
 CREATE POLICY "Users can unfollow"
   ON public.follows FOR DELETE
   TO authenticated
@@ -379,33 +400,39 @@ CREATE POLICY "Users can unfollow"
 -- ----------------------------------------------------------------------------
 -- GROUP CIRCLES POLICIES
 -- ----------------------------------------------------------------------------
+DROP POLICY IF EXISTS "Group circles viewable by members" ON public.group_circles;
 CREATE POLICY "Group circles viewable by members"
   ON public.group_circles FOR SELECT
   TO authenticated
   USING (true);
 
+DROP POLICY IF EXISTS "Authenticated users can create a group circle" ON public.group_circles;
 CREATE POLICY "Authenticated users can create a group circle"
   ON public.group_circles FOR INSERT
   TO authenticated
   WITH CHECK (auth.uid() = created_by);
 
 -- Group Members
+DROP POLICY IF EXISTS "Group members viewable by authenticated users" ON public.group_members;
 CREATE POLICY "Group members viewable by authenticated users"
   ON public.group_members FOR SELECT
   TO authenticated
   USING (true);
 
+DROP POLICY IF EXISTS "Users can join a group circle" ON public.group_members;
 CREATE POLICY "Users can join a group circle"
   ON public.group_members FOR INSERT
   TO authenticated
   WITH CHECK (auth.uid() = user_id);
 
 -- Group Nudges
+DROP POLICY IF EXISTS "Nudges viewable by group members" ON public.group_nudges;
 CREATE POLICY "Nudges viewable by group members"
   ON public.group_nudges FOR SELECT
   TO authenticated
   USING (auth.uid() = target_user_id OR auth.uid() = sender_id);
 
+DROP POLICY IF EXISTS "Users can send nudges" ON public.group_nudges;
 CREATE POLICY "Users can send nudges"
   ON public.group_nudges FOR INSERT
   TO authenticated
@@ -414,27 +441,32 @@ CREATE POLICY "Users can send nudges"
 -- ----------------------------------------------------------------------------
 -- VOUCHERS & WALLET POLICIES
 -- ----------------------------------------------------------------------------
+DROP POLICY IF EXISTS "Available vouchers viewable by all authenticated users" ON public.vouchers;
 CREATE POLICY "Available vouchers viewable by all authenticated users"
   ON public.vouchers FOR SELECT
   TO authenticated
   USING (is_active = true);
 
+DROP POLICY IF EXISTS "Users can view only their own claimed vouchers" ON public.claimed_vouchers;
 CREATE POLICY "Users can view only their own claimed vouchers"
   ON public.claimed_vouchers FOR SELECT
   TO authenticated
   USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can claim vouchers" ON public.claimed_vouchers;
 CREATE POLICY "Users can claim vouchers"
   ON public.claimed_vouchers FOR INSERT
   TO authenticated
   WITH CHECK (auth.uid() = user_id);
 
 -- Daily Missions
+DROP POLICY IF EXISTS "Users can view own daily missions" ON public.daily_missions;
 CREATE POLICY "Users can view own daily missions"
   ON public.daily_missions FOR SELECT
   TO authenticated
   USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can update own daily missions" ON public.daily_missions;
 CREATE POLICY "Users can update own daily missions"
   ON public.daily_missions FOR UPDATE
   TO authenticated
