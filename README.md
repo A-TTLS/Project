@@ -1,7 +1,7 @@
 # CalorieSnap - AI Calorie Calculator Application
 
-> **Group Name:** A TTLS (UTM Group 1)  
-> **Course:** Software Engineering / Web Development Project  
+> **Group Name:** A TTLS  
+> **Course:** Application Development Project  
 > **Project Manager:** Tey Xin Yi  
 
 CalorieSnap is a responsive social wellness and nutrition tracking web platform designed to eliminate logging fatigue through integrated artificial intelligence (AI), peer accountability, and gamified incentives.
