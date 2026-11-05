@@ -3,8 +3,26 @@
 -- Group: A TTLS (UTM Group 1)
 -- Authors: Aloysius Probo (Backend), Lee Hui Zhen (Frontend)
 -- Description: Supports Auth, Meals, Vision AI, Metrics, Social Circles, Gamification
--- Idempotent: Can safely be run repeatedly without collision errors
+-- Safe Clean-Install: Drops partial/outdated tables and rebuilds fresh
 -- ============================================================================
+
+-- 0. CLEANUP EXISTING TABLES & TRIGGERS (Guarantees clean execution without column mismatch)
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+DROP FUNCTION IF EXISTS public.handle_new_user() CASCADE;
+
+DROP TABLE IF EXISTS public.group_nudges CASCADE;
+DROP TABLE IF EXISTS public.group_members CASCADE;
+DROP TABLE IF EXISTS public.group_circles CASCADE;
+DROP TABLE IF EXISTS public.post_comments CASCADE;
+DROP TABLE IF EXISTS public.post_likes CASCADE;
+DROP TABLE IF EXISTS public.social_posts CASCADE;
+DROP TABLE IF EXISTS public.follows CASCADE;
+DROP TABLE IF EXISTS public.claimed_vouchers CASCADE;
+DROP TABLE IF EXISTS public.vouchers CASCADE;
+DROP TABLE IF EXISTS public.daily_missions CASCADE;
+DROP TABLE IF EXISTS public.daily_metrics CASCADE;
+DROP TABLE IF EXISTS public.meals CASCADE;
+DROP TABLE IF EXISTS public.profiles CASCADE;
 
 -- Enable required extensions
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
@@ -12,7 +30,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- ============================================================================
 -- 1. PROFILES TABLE (Linked 1-to-1 with Supabase auth.users)
 -- ============================================================================
-CREATE TABLE IF NOT EXISTS public.profiles (
+CREATE TABLE public.profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   email TEXT NOT NULL,
   full_name TEXT,
@@ -35,10 +53,20 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   updated_at TIMESTAMPTZ DEFAULT now()
 );
 
+-- Re-sync any existing auth users into profiles if any exist
+INSERT INTO public.profiles (id, email, full_name, username)
+SELECT 
+  id, 
+  email, 
+  COALESCE(raw_user_meta_data->>'full_name', split_part(email, '@', 1)),
+  COALESCE(raw_user_meta_data->>'username', '@' || split_part(email, '@', 1))
+FROM auth.users
+ON CONFLICT (id) DO NOTHING;
+
 -- ============================================================================
 -- 2. MEALS TABLE (Logged meals from manual entry or AI Vision photo snaps)
 -- ============================================================================
-CREATE TABLE IF NOT EXISTS public.meals (
+CREATE TABLE public.meals (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
@@ -55,13 +83,12 @@ CREATE TABLE IF NOT EXISTS public.meals (
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
--- Index for fast daily meal queries
-CREATE INDEX IF NOT EXISTS idx_meals_user_logged_at ON public.meals(user_id, logged_at DESC);
+CREATE INDEX idx_meals_user_logged_at ON public.meals(user_id, logged_at DESC);
 
 -- ============================================================================
 -- 3. DAILY METRICS TABLE (Water hydration, steps count, gym workout)
 -- ============================================================================
-CREATE TABLE IF NOT EXISTS public.daily_metrics (
+CREATE TABLE public.daily_metrics (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   metric_date DATE NOT NULL DEFAULT CURRENT_DATE,
@@ -74,12 +101,12 @@ CREATE TABLE IF NOT EXISTS public.daily_metrics (
   CONSTRAINT unique_user_daily_metrics UNIQUE (user_id, metric_date)
 );
 
-CREATE INDEX IF NOT EXISTS idx_daily_metrics_user_date ON public.daily_metrics(user_id, metric_date);
+CREATE INDEX idx_daily_metrics_user_date ON public.daily_metrics(user_id, metric_date);
 
 -- ============================================================================
 -- 4. SOCIAL POSTS TABLE (Instagram-style Following & Discover feeds)
 -- ============================================================================
-CREATE TABLE IF NOT EXISTS public.social_posts (
+CREATE TABLE public.social_posts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   meal_id UUID REFERENCES public.meals(id) ON DELETE SET NULL,
@@ -92,12 +119,12 @@ CREATE TABLE IF NOT EXISTS public.social_posts (
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
-CREATE INDEX IF NOT EXISTS idx_social_posts_created_at ON public.social_posts(created_at DESC);
+CREATE INDEX idx_social_posts_created_at ON public.social_posts(created_at DESC);
 
 -- ============================================================================
 -- 5. POST LIKES & COMMENTS
 -- ============================================================================
-CREATE TABLE IF NOT EXISTS public.post_likes (
+CREATE TABLE public.post_likes (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   post_id UUID NOT NULL REFERENCES public.social_posts(id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
@@ -105,7 +132,7 @@ CREATE TABLE IF NOT EXISTS public.post_likes (
   CONSTRAINT unique_post_user_like UNIQUE (post_id, user_id)
 );
 
-CREATE TABLE IF NOT EXISTS public.post_comments (
+CREATE TABLE public.post_comments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   post_id UUID NOT NULL REFERENCES public.social_posts(id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
@@ -116,7 +143,7 @@ CREATE TABLE IF NOT EXISTS public.post_comments (
 -- ============================================================================
 -- 6. FOLLOWS (Friend peer connections for "Following" tab)
 -- ============================================================================
-CREATE TABLE IF NOT EXISTS public.follows (
+CREATE TABLE public.follows (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   follower_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   following_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
@@ -128,7 +155,7 @@ CREATE TABLE IF NOT EXISTS public.follows (
 -- ============================================================================
 -- 7. GROUP CIRCLES & NUDGES (Private squads e.g. "Roomie Diet Squad")
 -- ============================================================================
-CREATE TABLE IF NOT EXISTS public.group_circles (
+CREATE TABLE public.group_circles (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
   description TEXT,
@@ -138,7 +165,7 @@ CREATE TABLE IF NOT EXISTS public.group_circles (
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
-CREATE TABLE IF NOT EXISTS public.group_members (
+CREATE TABLE public.group_members (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   group_id UUID NOT NULL REFERENCES public.group_circles(id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
@@ -147,7 +174,7 @@ CREATE TABLE IF NOT EXISTS public.group_members (
   CONSTRAINT unique_group_member UNIQUE (group_id, user_id)
 );
 
-CREATE TABLE IF NOT EXISTS public.group_nudges (
+CREATE TABLE public.group_nudges (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   group_id UUID NOT NULL REFERENCES public.group_circles(id) ON DELETE CASCADE,
   sender_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
@@ -159,7 +186,7 @@ CREATE TABLE IF NOT EXISTS public.group_nudges (
 -- ============================================================================
 -- 8. GAMIFIED REWARDS, MISSIONS & VOUCHERS
 -- ============================================================================
-CREATE TABLE IF NOT EXISTS public.vouchers (
+CREATE TABLE public.vouchers (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   brand TEXT NOT NULL,
   title TEXT NOT NULL,
@@ -171,7 +198,7 @@ CREATE TABLE IF NOT EXISTS public.vouchers (
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
-CREATE TABLE IF NOT EXISTS public.claimed_vouchers (
+CREATE TABLE public.claimed_vouchers (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   voucher_id UUID NOT NULL REFERENCES public.vouchers(id) ON DELETE CASCADE,
@@ -181,7 +208,7 @@ CREATE TABLE IF NOT EXISTS public.claimed_vouchers (
   expires_at TIMESTAMPTZ NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS public.daily_missions (
+CREATE TABLE public.daily_missions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   mission_date DATE NOT NULL DEFAULT CURRENT_DATE,
@@ -227,8 +254,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Drop trigger if exists and recreate
-DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
@@ -236,7 +261,6 @@ CREATE TRIGGER on_auth_user_created
 -- ============================================================================
 -- 10. ROW LEVEL SECURITY (RLS) POLICIES
 -- Strict security policies to ensure users only access their own private data
--- Each policy has a DROP POLICY IF EXISTS so this script can safely re-run
 -- ============================================================================
 
 -- Enable RLS on all tables
@@ -257,13 +281,11 @@ ALTER TABLE public.daily_missions ENABLE ROW LEVEL SECURITY;
 -- ----------------------------------------------------------------------------
 -- PROFILES POLICIES
 -- ----------------------------------------------------------------------------
-DROP POLICY IF EXISTS "Public profiles are readable by authenticated users" ON public.profiles;
 CREATE POLICY "Public profiles are readable by authenticated users"
   ON public.profiles FOR SELECT
   TO authenticated
   USING (true);
 
-DROP POLICY IF EXISTS "Users can update their own profile" ON public.profiles;
 CREATE POLICY "Users can update their own profile"
   ON public.profiles FOR UPDATE
   TO authenticated
@@ -272,25 +294,21 @@ CREATE POLICY "Users can update their own profile"
 -- ----------------------------------------------------------------------------
 -- MEALS POLICIES
 -- ----------------------------------------------------------------------------
-DROP POLICY IF EXISTS "Users can view own or public meals" ON public.meals;
 CREATE POLICY "Users can view own or public meals"
   ON public.meals FOR SELECT
   TO authenticated
   USING (auth.uid() = user_id OR is_public = true);
 
-DROP POLICY IF EXISTS "Users can insert own meals" ON public.meals;
 CREATE POLICY "Users can insert own meals"
   ON public.meals FOR INSERT
   TO authenticated
   WITH CHECK (auth.uid() = user_id);
 
-DROP POLICY IF EXISTS "Users can update own meals" ON public.meals;
 CREATE POLICY "Users can update own meals"
   ON public.meals FOR UPDATE
   TO authenticated
   USING (auth.uid() = user_id);
 
-DROP POLICY IF EXISTS "Users can delete own meals" ON public.meals;
 CREATE POLICY "Users can delete own meals"
   ON public.meals FOR DELETE
   TO authenticated
@@ -299,19 +317,16 @@ CREATE POLICY "Users can delete own meals"
 -- ----------------------------------------------------------------------------
 -- DAILY METRICS POLICIES
 -- ----------------------------------------------------------------------------
-DROP POLICY IF EXISTS "Users can read own daily metrics" ON public.daily_metrics;
 CREATE POLICY "Users can read own daily metrics"
   ON public.daily_metrics FOR SELECT
   TO authenticated
   USING (auth.uid() = user_id);
 
-DROP POLICY IF EXISTS "Users can insert own daily metrics" ON public.daily_metrics;
 CREATE POLICY "Users can insert own daily metrics"
   ON public.daily_metrics FOR INSERT
   TO authenticated
   WITH CHECK (auth.uid() = user_id);
 
-DROP POLICY IF EXISTS "Users can update own daily metrics" ON public.daily_metrics;
 CREATE POLICY "Users can update own daily metrics"
   ON public.daily_metrics FOR UPDATE
   TO authenticated
@@ -320,57 +335,48 @@ CREATE POLICY "Users can update own daily metrics"
 -- ----------------------------------------------------------------------------
 -- SOCIAL POSTS, LIKES, COMMENTS POLICIES
 -- ----------------------------------------------------------------------------
-DROP POLICY IF EXISTS "Public posts are viewable by all authenticated users" ON public.social_posts;
 CREATE POLICY "Public posts are viewable by all authenticated users"
   ON public.social_posts FOR SELECT
   TO authenticated
   USING (visibility = 'public' OR auth.uid() = user_id);
 
-DROP POLICY IF EXISTS "Users can create their own posts" ON public.social_posts;
 CREATE POLICY "Users can create their own posts"
   ON public.social_posts FOR INSERT
   TO authenticated
   WITH CHECK (auth.uid() = user_id);
 
-DROP POLICY IF EXISTS "Users can delete their own posts" ON public.social_posts;
 CREATE POLICY "Users can delete their own posts"
   ON public.social_posts FOR DELETE
   TO authenticated
   USING (auth.uid() = user_id);
 
 -- Post Likes
-DROP POLICY IF EXISTS "Likes are viewable by authenticated users" ON public.post_likes;
 CREATE POLICY "Likes are viewable by authenticated users"
   ON public.post_likes FOR SELECT
   TO authenticated
   USING (true);
 
-DROP POLICY IF EXISTS "Users can toggle their own like" ON public.post_likes;
 CREATE POLICY "Users can toggle their own like"
   ON public.post_likes FOR INSERT
   TO authenticated
   WITH CHECK (auth.uid() = user_id);
 
-DROP POLICY IF EXISTS "Users can remove their own like" ON public.post_likes;
 CREATE POLICY "Users can remove their own like"
   ON public.post_likes FOR DELETE
   TO authenticated
   USING (auth.uid() = user_id);
 
 -- Post Comments
-DROP POLICY IF EXISTS "Comments are viewable by authenticated users" ON public.post_comments;
 CREATE POLICY "Comments are viewable by authenticated users"
   ON public.post_comments FOR SELECT
   TO authenticated
   USING (true);
 
-DROP POLICY IF EXISTS "Users can post comments" ON public.post_comments;
 CREATE POLICY "Users can post comments"
   ON public.post_comments FOR INSERT
   TO authenticated
   WITH CHECK (auth.uid() = user_id);
 
-DROP POLICY IF EXISTS "Users can delete own comments" ON public.post_comments;
 CREATE POLICY "Users can delete own comments"
   ON public.post_comments FOR DELETE
   TO authenticated
@@ -379,19 +385,16 @@ CREATE POLICY "Users can delete own comments"
 -- ----------------------------------------------------------------------------
 -- FOLLOWS POLICIES
 -- ----------------------------------------------------------------------------
-DROP POLICY IF EXISTS "Follows are viewable by authenticated users" ON public.follows;
 CREATE POLICY "Follows are viewable by authenticated users"
   ON public.follows FOR SELECT
   TO authenticated
   USING (true);
 
-DROP POLICY IF EXISTS "Users can follow others" ON public.follows;
 CREATE POLICY "Users can follow others"
   ON public.follows FOR INSERT
   TO authenticated
   WITH CHECK (auth.uid() = follower_id);
 
-DROP POLICY IF EXISTS "Users can unfollow" ON public.follows;
 CREATE POLICY "Users can unfollow"
   ON public.follows FOR DELETE
   TO authenticated
@@ -400,39 +403,33 @@ CREATE POLICY "Users can unfollow"
 -- ----------------------------------------------------------------------------
 -- GROUP CIRCLES POLICIES
 -- ----------------------------------------------------------------------------
-DROP POLICY IF EXISTS "Group circles viewable by members" ON public.group_circles;
 CREATE POLICY "Group circles viewable by members"
   ON public.group_circles FOR SELECT
   TO authenticated
   USING (true);
 
-DROP POLICY IF EXISTS "Authenticated users can create a group circle" ON public.group_circles;
 CREATE POLICY "Authenticated users can create a group circle"
   ON public.group_circles FOR INSERT
   TO authenticated
   WITH CHECK (auth.uid() = created_by);
 
 -- Group Members
-DROP POLICY IF EXISTS "Group members viewable by authenticated users" ON public.group_members;
 CREATE POLICY "Group members viewable by authenticated users"
   ON public.group_members FOR SELECT
   TO authenticated
   USING (true);
 
-DROP POLICY IF EXISTS "Users can join a group circle" ON public.group_members;
 CREATE POLICY "Users can join a group circle"
   ON public.group_members FOR INSERT
   TO authenticated
   WITH CHECK (auth.uid() = user_id);
 
 -- Group Nudges
-DROP POLICY IF EXISTS "Nudges viewable by group members" ON public.group_nudges;
 CREATE POLICY "Nudges viewable by group members"
   ON public.group_nudges FOR SELECT
   TO authenticated
   USING (auth.uid() = target_user_id OR auth.uid() = sender_id);
 
-DROP POLICY IF EXISTS "Users can send nudges" ON public.group_nudges;
 CREATE POLICY "Users can send nudges"
   ON public.group_nudges FOR INSERT
   TO authenticated
@@ -441,32 +438,27 @@ CREATE POLICY "Users can send nudges"
 -- ----------------------------------------------------------------------------
 -- VOUCHERS & WALLET POLICIES
 -- ----------------------------------------------------------------------------
-DROP POLICY IF EXISTS "Available vouchers viewable by all authenticated users" ON public.vouchers;
 CREATE POLICY "Available vouchers viewable by all authenticated users"
   ON public.vouchers FOR SELECT
   TO authenticated
   USING (is_active = true);
 
-DROP POLICY IF EXISTS "Users can view only their own claimed vouchers" ON public.claimed_vouchers;
 CREATE POLICY "Users can view only their own claimed vouchers"
   ON public.claimed_vouchers FOR SELECT
   TO authenticated
   USING (auth.uid() = user_id);
 
-DROP POLICY IF EXISTS "Users can claim vouchers" ON public.claimed_vouchers;
 CREATE POLICY "Users can claim vouchers"
   ON public.claimed_vouchers FOR INSERT
   TO authenticated
   WITH CHECK (auth.uid() = user_id);
 
 -- Daily Missions
-DROP POLICY IF EXISTS "Users can view own daily missions" ON public.daily_missions;
 CREATE POLICY "Users can view own daily missions"
   ON public.daily_missions FOR SELECT
   TO authenticated
   USING (auth.uid() = user_id);
 
-DROP POLICY IF EXISTS "Users can update own daily missions" ON public.daily_missions;
 CREATE POLICY "Users can update own daily missions"
   ON public.daily_missions FOR UPDATE
   TO authenticated
