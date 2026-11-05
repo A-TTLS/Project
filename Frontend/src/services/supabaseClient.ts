@@ -16,3 +16,41 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     detectSessionInUrl: true,
   },
 });
+
+export async function checkSupabaseHealth(): Promise<{
+  connected: boolean;
+  message: string;
+  projectUrl: string;
+}> {
+  if (!isSupabaseConfigured) {
+    return {
+      connected: false,
+      message: 'Supabase keys not configured in .env',
+      projectUrl: supabaseUrl,
+    };
+  }
+
+  try {
+    // Ping Supabase public profiles table
+    const { error } = await supabase.from('profiles').select('id').limit(1);
+    if (error && error.message && error.message.toLowerCase().includes('failed to fetch')) {
+      return {
+        connected: false,
+        message: 'Could not reach Supabase endpoint',
+        projectUrl: supabaseUrl,
+      };
+    }
+
+    return {
+      connected: true,
+      message: 'Successfully connected to Supabase PostgreSQL',
+      projectUrl: supabaseUrl,
+    };
+  } catch (err: any) {
+    return {
+      connected: false,
+      message: err?.message || 'Connection error',
+      projectUrl: supabaseUrl,
+    };
+  }
+}

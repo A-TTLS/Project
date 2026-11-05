@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, ScrollView, Pressable, SafeAreaView } from 'react-native-web';
 import { AppProvider, useApp } from './context/AppContext';
 import LandingPage from './pages/LandingPage';
@@ -15,9 +15,11 @@ import ProfileScreen from './screens/ProfileScreen';
 import RewardsScreen from './screens/RewardsScreen';
 import { Txt, Row, c } from './ui';
 import type { ActivityLevel, UserMeasurements, UserProfile } from './services/authService';
+import { checkSupabaseHealth } from './services/supabaseClient';
 
 function AppContent() {
   const [currentScreen, setCurrentScreen] = useState('Home');
+  const [dbStatus, setDbStatus] = useState<'checking' | 'connected' | 'offline'>('checking');
   const [capturedMeal, setCapturedMeal] = useState<{
     name: string;
     kcal: number;
@@ -28,6 +30,14 @@ function AppContent() {
   } | undefined>();
 
   const [showNavSwitcher, setShowNavSwitcher] = useState(true);
+
+  // Check Supabase Backend Health on load
+  useEffect(() => {
+    checkSupabaseHealth().then((res) => {
+      setDbStatus(res.connected ? 'connected' : 'offline');
+      console.log(`[CalorieSnap] Supabase Backend: ${res.connected ? '🟢 CONNECTED' : '🔴 OFFLINE'} (${res.message})`);
+    });
+  }, []);
 
   // Onboarding state
   const [user, setUser] = useState<UserProfile | null>(null);
@@ -173,8 +183,24 @@ function AppContent() {
       >
         <Row style={{ justifyContent: 'space-between', paddingHorizontal: 12, alignItems: 'center' }}>
           <Row style={{ alignItems: 'center', gap: 6 }}>
-            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#22c55e' }} />
+            <View style={{
+              width: 8,
+              height: 8,
+              borderRadius: 4,
+              backgroundColor: dbStatus === 'connected' ? '#22c55e' : dbStatus === 'checking' ? '#eab308' : '#ef4444'
+            }} />
             <Txt s={11} w="700">CalorieSnap Prototype</Txt>
+            <View style={{
+              paddingHorizontal: 6,
+              paddingVertical: 2,
+              borderRadius: 4,
+              backgroundColor: dbStatus === 'connected' ? '#dcfce7' : dbStatus === 'checking' ? '#fef9c3' : '#fee2e2',
+              marginLeft: 4,
+            }}>
+              <Txt s={9} w="700" color={dbStatus === 'connected' ? '#15803d' : dbStatus === 'checking' ? '#a16207' : '#b91c1c'}>
+                {dbStatus === 'connected' ? 'SUPABASE LIVE' : dbStatus === 'checking' ? 'CONNECTING...' : 'OFFLINE DEMO'}
+              </Txt>
+            </View>
           </Row>
 
           <Pressable
