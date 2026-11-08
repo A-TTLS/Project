@@ -144,14 +144,14 @@ export const IconBox = ({ size = 36, label = '', onPress }: { size?: number; lab
       pressed && { opacity: 0.7 },
     ]}
   >
-    {label === 'cal' ? <Icon name="flag" size={size * 0.5} /> :
+    {label === 'cal' ? <Txt s={16}>🗓</Txt> :
      label === 'bell' ? <Icon name="sparkles" size={size * 0.5} /> :
      label === 'camera' ? <Icon name="camera" size={size * 0.5} /> :
      label === 'flash' ? <Icon name="sparkles" size={size * 0.5} /> :
      label === 'img' ? <Icon name="sprout" size={size * 0.5} /> :
      label === 'flip' ? <Icon name="arrow" size={size * 0.5} /> :
      label === 'settings' || label === '⚙' ? <Icon name="scale" size={size * 0.5} /> :
-     label === 'wallet' ? <Icon name="flag" size={size * 0.5} /> :
+     label === 'wallet' ? <Txt s={16}>🎁</Txt>:
      <Txt s={12} color={c.mute}>{label}</Txt>}
   </Pressable>
 );
