@@ -9,6 +9,7 @@ import {
   View,
 } from "react-native-web";
 import { authService, type UserProfile } from "../services/authService";
+import { useApp } from "../context/AppContext";
 import { ActionButton, colors, fonts, Icon, type IconName } from "../ui";
 
 interface RegisterPageProps {
@@ -24,6 +25,7 @@ export default function RegisterPage({
 }: RegisterPageProps) {
   const { width } = useWindowDimensions();
   const isWide = width >= 640;
+  const { setCurrentUser, reloadUserData } = useApp();
 
   // Clean, empty initial inputs so real users can fill in their details
   const [name, setName] = useState("");
@@ -76,6 +78,8 @@ export default function RegisterPage({
     setIsSubmitting(false);
 
     if (res.success) {
+      if (res.user) await setCurrentUser(res.user);
+      await reloadUserData();
       setMessage({ type: "success", text: "Account created successfully!" });
       setTimeout(() => {
         onCreated(profile);
@@ -93,6 +97,8 @@ export default function RegisterPage({
     setIsGoogleLoading(false);
 
     if (res.success && res.user) {
+      await setCurrentUser(res.user);
+      await reloadUserData();
       const profile: UserProfile = {
         name: res.user.name,
         username: `@${res.user.email.split("@")[0]}`,

@@ -31,14 +31,27 @@ export async function checkSupabaseHealth(): Promise<{
   }
 
   try {
-    // Ping Supabase public profiles table
-    const { error } = await supabase.from('profiles').select('id').limit(1);
-    if (error && error.message && error.message.toLowerCase().includes('failed to fetch')) {
+    // 1. Check Auth service session reachability
+    const { error: authError } = await supabase.auth.getSession();
+    if (authError) {
       return {
         connected: false,
-        message: 'Could not reach Supabase endpoint',
+        message: `Auth check: ${authError.message}`,
         projectUrl: supabaseUrl,
       };
+    }
+
+    // 2. Ping Supabase public profiles table
+    const { error: dbError } = await supabase.from('profiles').select('id').limit(1);
+    if (dbError) {
+      const lower = dbError.message ? dbError.message.toLowerCase() : '';
+      if (lower.includes('api key') || lower.includes('failed to fetch') || dbError.code === 'PGRST301') {
+        return {
+          connected: false,
+          message: `Database check: ${dbError.message}`,
+          projectUrl: supabaseUrl,
+        };
+      }
     }
 
     return {

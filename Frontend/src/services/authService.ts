@@ -62,7 +62,7 @@ export const authService = {
     if (isSupabaseConfigured) {
       try {
         const { data, error } = await supabase.auth.signInWithPassword({
-          email,
+          email: email.trim().toLowerCase(),
           password,
         });
 
@@ -70,11 +70,17 @@ export const authService = {
           return { success: false, error: error.message };
         }
 
+        const fullName = data.user.user_metadata?.full_name || email.split('@')[0];
+        const rawUsername = data.user.user_metadata?.username || `@${email.split('@')[0]}`;
+        const username = rawUsername.startsWith('@') ? rawUsername : `@${rawUsername}`;
+
         return {
           success: true,
           user: {
+            id: data.user.id,
             email: data.user.email,
-            name: data.user.user_metadata?.full_name || email.split('@')[0],
+            name: fullName,
+            username: username,
           },
         };
       } catch (err: any) {
@@ -82,7 +88,15 @@ export const authService = {
       }
     }
 
-    return { success: true };
+    // Offline demo fallback
+    return {
+      success: true,
+      user: {
+        email: email.trim(),
+        name: email.split('@')[0],
+        username: `@${email.split('@')[0]}`,
+      },
+    };
   },
 
   /**
@@ -93,15 +107,17 @@ export const authService = {
       return { success: false, error: "All registration fields are required." };
     }
 
+    const cleanUsername = profile.username.startsWith('@') ? profile.username : `@${profile.username.trim()}`;
+
     if (isSupabaseConfigured) {
       try {
         const { data, error } = await supabase.auth.signUp({
-          email: profile.email,
+          email: profile.email.trim().toLowerCase(),
           password,
           options: {
             data: {
-              full_name: profile.name,
-              username: profile.username,
+              full_name: profile.name.trim(),
+              username: cleanUsername,
             },
           },
         });
@@ -110,16 +126,41 @@ export const authService = {
           return { success: false, error: error.message };
         }
 
+        // Also ensure a profiles row is created or synced
+        if (data.user) {
+          await supabase.from('profiles').upsert({
+            id: data.user.id,
+            email: profile.email.trim().toLowerCase(),
+            full_name: profile.name.trim(),
+            username: cleanUsername,
+            daily_calorie_target: 1850,
+            streak_days: 1,
+            snap_points: 100,
+          }).then(() => {});
+        }
+
         return {
           success: true,
-          user: data.user,
+          user: {
+            id: data.user?.id,
+            email: profile.email.trim(),
+            name: profile.name.trim(),
+            username: cleanUsername,
+          },
         };
       } catch (err: any) {
         return { success: false, error: err.message || "Registration failed." };
       }
     }
 
-    return { success: true };
+    return {
+      success: true,
+      user: {
+        email: profile.email.trim(),
+        name: profile.name.trim(),
+        username: cleanUsername,
+      },
+    };
   },
 
   /**
@@ -138,6 +179,7 @@ export const authService = {
           await supabase.from('profiles').upsert({
             id: user.id,
             email: user.email,
+            full_name: user.user_metadata?.full_name,
             gender: measurements.gender,
             age: parseInt(measurements.age) || null,
             height_cm: Math.round(cm * 10) / 10,

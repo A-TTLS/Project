@@ -72,6 +72,7 @@ interface AppContextType {
   proteinGoal: number;
   carbsGoal: number;
   fatGoal: number;
+  setCurrentUser: (u: { id?: string; email?: string; name?: string; username?: string }) => Promise<void>;
   updateProfile: (profile: Partial<{
     name: string;
     username: string;
@@ -123,30 +124,30 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 export function AppProvider({ children }: { children: ReactNode }) {
   // Auth state
   const [userId, setUserId] = useState<string | null>(null);
-  const [userEmail, setUserEmail] = useState('student@utm.my');
+  const [userEmail, setUserEmail] = useState<string>('');
 
-  // User Profile State
-  const [userName, setUserName] = useState('Hui Zhen');
-  const [userHandle, setUserHandle] = useState('@huizhen');
-  const [userBio, setUserBio] = useState('UTM Software Engineering · Uni life, good food & little wins');
-  const [streakDays, setStreakDays] = useState(12);
-  const [snapPoints, setSnapPoints] = useState(1450);
-  const [followersCount, setFollowersCount] = useState(248);
-  const [followingCount, setFollowingCount] = useState(182);
-  const [groupsCount, setGroupsCount] = useState(3);
-  const [currentWeight, setCurrentWeight] = useState(48.5);
-  const [targetWeight, setTargetWeight] = useState(48.0);
-  const [bmi, setBmi] = useState(19.4);
+  // User Profile State (Dynamic, never hardcoded to one specific person!)
+  const [userName, setUserName] = useState<string>('CalorieSnap User');
+  const [userHandle, setUserHandle] = useState<string>('@user');
+  const [userBio, setUserBio] = useState<string>('Uni life, good food & little wins');
+  const [streakDays, setStreakDays] = useState(1);
+  const [snapPoints, setSnapPoints] = useState(100);
+  const [followersCount, setFollowersCount] = useState(0);
+  const [followingCount, setFollowingCount] = useState(0);
+  const [groupsCount, setGroupsCount] = useState(1);
+  const [currentWeight, setCurrentWeight] = useState(55.0);
+  const [targetWeight, setTargetWeight] = useState(52.0);
+  const [bmi, setBmi] = useState(21.2);
   const [calorieGoal, setCalorieGoal] = useState(1850);
   const [proteinGoal, setProteinGoal] = useState(90);
   const [carbsGoal, setCarbsGoal] = useState(180);
   const [fatGoal, setFatGoal] = useState(50);
 
   // Daily Metrics
-  const [burnedKcal, setBurnedKcal] = useState(220);
-  const [waterMl, setWaterMl] = useState(1500);
-  const [stepsCount, setStepsCount] = useState(6840);
-  const [workoutMins, setWorkoutMins] = useState(30);
+  const [burnedKcal, setBurnedKcal] = useState(200);
+  const [waterMl, setWaterMl] = useState(1250);
+  const [stepsCount, setStepsCount] = useState(4500);
+  const [workoutMins, setWorkoutMins] = useState(20);
 
   // Toast
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -159,51 +160,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [todayMeals, setTodayMeals] = useState<MealItem[]>([
     {
       id: 'm1',
-      name: 'Berry overnight oats',
+      name: 'Oatmeal & Banana',
       category: 'Breakfast',
       meta: 'Breakfast · Logged',
-      kcal: 320,
-      protein: 14,
-      carbs: 48,
-      fat: 8,
+      kcal: 310,
+      protein: 12,
+      carbs: 52,
+      fat: 6,
       logged: true,
-      time: '8:15 AM',
+      time: '8:30 AM',
     },
     {
       id: 'm2',
-      name: 'Hainanese Chicken Rice',
+      name: 'Chicken Rice',
       category: 'Lunch',
-      meta: 'Lunch · Planned',
-      kcal: 580,
-      protein: 38,
-      carbs: 65,
-      fat: 18,
-      logged: false,
-      time: '12:45 PM',
-    },
-    {
-      id: 'm3',
-      name: 'Salmon nourish bowl',
-      category: 'Dinner',
-      meta: 'Dinner · Planned',
-      kcal: 420,
-      protein: 32,
-      carbs: 40,
-      fat: 15,
-      logged: false,
-      time: '7:10 PM',
-    },
-    {
-      id: 'm4',
-      name: 'Yogurt & berries',
-      category: 'Snacks',
-      meta: 'Snacks · Logged',
-      kcal: 180,
-      protein: 10,
-      carbs: 22,
-      fat: 4,
+      meta: 'Lunch · Logged',
+      kcal: 560,
+      protein: 34,
+      carbs: 62,
+      fat: 16,
       logged: true,
-      time: '4:20 PM',
+      time: '1:00 PM',
     },
   ]);
 
@@ -318,13 +295,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
     { name: 'Chloe Lim', streak: '🔥 1-day streak', pct: '38% of daily goal', slots: 1 },
   ]);
 
+  // Set Current User manually (e.g. upon login/registration)
+  const setCurrentUser = async (u: { id?: string; email?: string; name?: string; username?: string }) => {
+    if (u.id) setUserId(u.id);
+    if (u.email) setUserEmail(u.email);
+    if (u.name) setUserName(u.name);
+    if (u.username) {
+      const clean = u.username.startsWith('@') ? u.username : `@${u.username}`;
+      setUserHandle(clean);
+    }
+  };
+
   // Load live Supabase user & data
   const loadUserData = async () => {
     if (!isSupabaseConfigured) return;
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) {
         setUserId(null);
         return;
       }
@@ -332,7 +320,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setUserId(user.id);
       if (user.email) setUserEmail(user.email);
 
-      // 1. Fetch user profile
+      // Immediately extract full name from auth metadata if present
+      const metaFullName = user.user_metadata?.full_name || user.email?.split('@')[0] || 'Student';
+      const metaUsername = user.user_metadata?.username || `@${user.email?.split('@')[0] || 'student'}`;
+      setUserName(metaFullName);
+      setUserHandle(metaUsername.startsWith('@') ? metaUsername : `@${metaUsername}`);
+
+      // 1. Fetch user profile from database
       const { data: profile } = await supabase
         .from('profiles')
         .select('*')
@@ -341,7 +335,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       if (profile) {
         if (profile.full_name) setUserName(profile.full_name);
-        if (profile.username) setUserHandle(profile.username);
+        if (profile.username) {
+          const raw = profile.username.startsWith('@') ? profile.username : `@${profile.username}`;
+          setUserHandle(raw);
+        }
         if (profile.bio) setUserBio(profile.bio);
         if (profile.streak_days !== undefined && profile.streak_days !== null) setStreakDays(profile.streak_days);
         if (profile.snap_points !== undefined && profile.snap_points !== null) setSnapPoints(profile.snap_points);
@@ -352,12 +349,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (profile.target_carbs_g) setCarbsGoal(Number(profile.target_carbs_g));
         if (profile.target_fat_g) setFatGoal(Number(profile.target_fat_g));
 
-        // BMI Calculation
         if (profile.height_cm && profile.current_weight_kg) {
           const hM = Number(profile.height_cm) / 100;
           const calculatedBmi = Math.round((Number(profile.current_weight_kg) / (hM * hM)) * 10) / 10;
           if (calculatedBmi > 10 && calculatedBmi < 60) setBmi(calculatedBmi);
         }
+      } else {
+        // Self-heal: ensure profiles row exists in database for this authenticated user
+        await supabase.from('profiles').upsert({
+          id: user.id,
+          email: user.email,
+          full_name: metaFullName,
+          username: metaUsername.startsWith('@') ? metaUsername : `@${metaUsername}`,
+          bio: 'Uni life, good food & little wins',
+          daily_calorie_target: 1850,
+          streak_days: 1,
+          snap_points: 100,
+        }).then(() => {});
       }
 
       // 2. Fetch today's metrics (water, steps, workout)
@@ -412,12 +420,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     // Listen for auth state changes (login, logout, token refresh)
     if (isSupabaseConfigured) {
-      const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-        if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
-          loadUserData();
+      const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+        if (session?.user) {
+          setUserId(session.user.id);
+          if (session.user.email) setUserEmail(session.user.email);
+          const fName = session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'Student';
+          const uName = session.user.user_metadata?.username || `@${session.user.email?.split('@')[0] || 'student'}`;
+          setUserName(fName);
+          setUserHandle(uName.startsWith('@') ? uName : `@${uName}`);
+          await loadUserData();
         } else if (event === 'SIGNED_OUT') {
           setUserId(null);
           setUserEmail('');
+          setUserName('CalorieSnap User');
+          setUserHandle('@user');
         }
       });
 
@@ -475,7 +491,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }).select().single();
 
         if (data) {
-          // Replace temp ID with Supabase UUID
           setTodayMeals((prev) => prev.map((m) => (m.id === tempId ? { ...m, id: data.id } : m)));
         }
         if (error) throw error;
@@ -558,6 +573,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await authService.signOut();
     setUserId(null);
     setUserEmail('');
+    setUserName('CalorieSnap User');
+    setUserHandle('@user');
+    setUserBio('Uni life, good food & little wins');
+    setTodayMeals([]);
+    setWaterMl(0);
     showToast('Signed out successfully.');
   };
 
@@ -645,6 +665,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         proteinGoal,
         carbsGoal,
         fatGoal,
+        setCurrentUser,
         updateProfile,
         signOut,
 

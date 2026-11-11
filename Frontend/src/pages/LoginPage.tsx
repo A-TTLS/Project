@@ -9,6 +9,7 @@ import {
   View,
 } from "react-native-web";
 import { authService } from "../services/authService";
+import { useApp } from "../context/AppContext";
 import { ActionButton, colors, fonts, Icon } from "../ui";
 
 interface LoginPageProps {
@@ -24,6 +25,7 @@ export default function LoginPage({
 }: LoginPageProps) {
   const { width } = useWindowDimensions();
   const isWide = width >= 640;
+  const { setCurrentUser, reloadUserData } = useApp();
 
   // Clean empty inputs - allowing the user to type their real info!
   const [email, setEmail] = useState("");
@@ -50,6 +52,8 @@ export default function LoginPage({
     setIsSubmitting(false);
 
     if (res.success) {
+      if (res.user) await setCurrentUser(res.user);
+      await reloadUserData();
       onSignedIn(email.trim());
     } else {
       setMessage({ type: "error", text: res.error || "Failed to sign in." });
@@ -64,6 +68,8 @@ export default function LoginPage({
     setIsGoogleLoading(false);
 
     if (res.success && res.user) {
+      await setCurrentUser(res.user);
+      await reloadUserData();
       setMessage({ type: "success", text: `Welcome back, ${res.user.name}!` });
       setTimeout(() => {
         onSignedIn(res.user!.email);
