@@ -1,3 +1,5 @@
+import { Icon, legacyAssets as assets, type IconName } from './components/Icons';
+export { assets, type IconName, Icon };
 import React, { type ReactNode } from "react";
 import {
   Image,
@@ -11,32 +13,6 @@ import {
   type ViewStyle,
 } from "react-native-web";
 
-export const assets = {
-  hero: "/assets/72efe.png",
-  scan: "/assets/fb8e5.svg",
-  sparkles: "/assets/dc79a.svg",
-  sparklesLg: "/assets/7a87f.svg",
-  mail: "/assets/a49e2.svg",
-  eyeOff: "/assets/bf239.svg",
-  arrow: "/assets/8ba74.svg",
-  arrowLeft: "/assets/e30c5.svg",
-  chrome: "/assets/3d675.svg",
-  apple: "/assets/c766b.svg",
-  sprout: "/assets/b524f.svg",
-  user: "/assets/b47f9.svg",
-  at: "/assets/919d1.svg",
-  check: "/assets/53645.svg",
-  lock: "/assets/671fc.svg",
-  scale: "/assets/35815.svg",
-  flag: "/assets/277b4.svg",
-  armchair: "/assets/19d39.svg",
-  circle: "/assets/bab11.svg",
-  footprints: "/assets/b787b.svg",
-  bike: "/assets/8cf17.svg",
-  circleCheck: "/assets/4f007.svg",
-  dumbbell: "/assets/cbe69.svg",
-  camera: "/assets/3fb17.svg",
-};
 
 export const colors = {
   background: "#faf9f6",
@@ -79,17 +55,7 @@ export const fonts = {
   jakartaExtraBold: "'Plus Jakarta Sans', sans-serif",
 };
 
-export type IconName = keyof typeof assets;
 
-export function Icon({ name, size }: { name: IconName; size: number }) {
-  return (
-    <Image
-      accessibilityIgnoresInvertColors
-      source={{ uri: assets[name] }}
-      style={{ width: size, height: size }}
-    />
-  );
-}
 
 // Wireframe Typography & Layout Primitives
 export const Txt = ({ s = 14, w = '400', color = c.ink, style, children, ...rest }: any) => (
@@ -144,14 +110,19 @@ export const IconBox = ({ size = 36, label = '', onPress }: { size?: number; lab
       pressed && { opacity: 0.7 },
     ]}
   >
-    {label === 'cal' ? <Txt s={16}>🗓</Txt> :
-     label === 'bell' ? <Icon name="sparkles" size={size * 0.5} /> :
-     label === 'camera' ? <Icon name="camera" size={size * 0.5} /> :
-     label === 'flash' ? <Icon name="sparkles" size={size * 0.5} /> :
-     label === 'img' ? <Icon name="sprout" size={size * 0.5} /> :
-     label === 'flip' ? <Icon name="arrow" size={size * 0.5} /> :
-     label === 'settings' || label === '⚙' ? <Icon name="scale" size={size * 0.5} /> :
-     label === 'wallet' ? <Txt s={16}>🎁</Txt>:
+    {label === 'cal' ? <Icon name="calendar" size={size * 0.52} color={c.ink} /> :
+     label === 'bell' ? <Icon name="bell" size={size * 0.52} color={c.ink} /> :
+     label === 'camera' ? <Icon name="camera" size={size * 0.52} color={c.ink} /> :
+     label === 'flash' ? <Icon name="sparkles" size={size * 0.52} color={c.ink} /> :
+     label === 'img' ? <Icon name="sprout" size={size * 0.52} color={c.ink} /> :
+     label === 'flip' ? <Icon name="arrow" size={size * 0.52} color={c.ink} /> :
+     label === 'settings' || label === '⚙' ? <Icon name="settings" size={size * 0.52} color={c.ink} /> :
+     label === 'wallet' ? <Icon name="gift" size={size * 0.52} color={c.ink} /> :
+     label === 'edit' ? <Icon name="edit" size={size * 0.52} color={c.ink} /> :
+     label === 'trash' ? <Icon name="trash" size={size * 0.52} color="#C0504A" /> :
+     label === 'plus' ? <Icon name="plus" size={size * 0.52} color={c.ink} /> :
+     label === 'lock' ? <Icon name="lock" size={size * 0.52} color={c.ink} /> :
+     label === 'mail' ? <Icon name="mail" size={size * 0.52} color={c.ink} /> :
      <Txt s={12} color={c.mute}>{label}</Txt>}
   </Pressable>
 );
@@ -199,45 +170,55 @@ export const SectionHead = ({ title, right }: { title: string; right?: string })
 
 export const TABS = ['Home', 'Social', 'Scan', 'Trend', 'Profile'];
 
-export const TabBar = ({ active, onSelectTab }: { active: string; onSelectTab?: (tab: string) => void }) => (
-  <Row style={st.tabbar}>
-    {TABS.map((t) => {
-      const isScan = t === 'Scan';
-      const isSelected = t === active;
-      return (
-        <Pressable
-          key={t}
-          onPress={() => onSelectTab && onSelectTab(t)}
-          style={{ alignItems: 'center', flex: 1, marginTop: isScan ? -22 : 0, cursor: 'pointer' as any }}
-        >
-          <View
-            style={{
-              width: isScan ? 54 : 40,
-              height: isScan ? 54 : 28,
-              borderRadius: isScan ? 27 : 14,
-              backgroundColor: isScan ? c.yellow : isSelected ? c.yellow : 'transparent',
-              alignItems: 'center',
-              justifyContent: 'center',
-              marginBottom: 2,
-              borderWidth: isScan ? 2 : 0,
-              borderColor: c.card,
-              boxShadow: isScan ? '0 4px 10px rgba(0,0,0,0.15)' : undefined,
-            }}
+export const TabBar = ({ active, onSelectTab }: { active: string; onSelectTab?: (tab: string) => void }) => {
+  const tabsConfig = [
+    { name: 'Home', icon: 'home', label: 'Home' },
+    { name: 'Social', icon: 'social', label: 'Social' },
+    { name: 'Scan', icon: 'camera', label: 'Scan' },
+    { name: 'Trend', icon: 'trend', label: 'Trends' },
+    { name: 'Profile', icon: 'profile', label: 'Profile' },
+  ];
+
+  return (
+    <Row style={st.tabbar}>
+      {tabsConfig.map((item) => {
+        const isScan = item.name === 'Scan';
+        const isSelected = item.name === active || (item.name === 'Social' && active.startsWith('Social')) || (item.name === 'Trend' && active.startsWith('Trend'));
+        return (
+          <Pressable
+            key={item.name}
+            onPress={() => onSelectTab && onSelectTab(item.name)}
+            style={{ alignItems: 'center', flex: 1, marginTop: isScan ? -22 : 0, cursor: 'pointer' as any }}
           >
-            {isScan ? (
-              <Icon name="camera" size={24} />
-            ) : isSelected ? (
-              <View style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: c.ink }} />
-            ) : (
-              <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: c.mute }} />
-            )}
-          </View>
-          <Txt s={10} w={isSelected ? '800' : '500'} color={isSelected ? c.ink : c.mute}>{t}</Txt>
-        </Pressable>
-      );
-    })}
-  </Row>
-);
+            <View
+              style={{
+                width: isScan ? 54 : 38,
+                height: isScan ? 54 : 32,
+                borderRadius: isScan ? 27 : 16,
+                backgroundColor: isScan ? c.yellow : isSelected ? '#FFEFA0' : 'transparent',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: 2,
+                borderWidth: isScan ? 3 : 0,
+                borderColor: '#ffffff',
+                boxShadow: isScan ? '0 4px 10px rgba(0,0,0,0.18)' : undefined,
+              }}
+            >
+              <Icon
+                name={item.icon}
+                size={isScan ? 24 : 18}
+                color={isSelected || isScan ? c.ink : c.mute}
+              />
+            </View>
+            <Txt s={10} w={isSelected ? '800' : '600'} color={isSelected ? c.ink : c.mute}>
+              {item.label}
+            </Txt>
+          </Pressable>
+        );
+      })}
+    </Row>
+  );
+};
 
 export const Screen = ({
   tab,

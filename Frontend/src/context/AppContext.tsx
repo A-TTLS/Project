@@ -1,4 +1,6 @@
-import React, { createContext, useContext, useState, type ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
+import { supabase, isSupabaseConfigured } from '../services/supabaseClient';
+import { authService } from '../services/authService';
 
 export interface MealItem {
   id: string;
@@ -52,7 +54,9 @@ export interface GroupMember {
 }
 
 interface AppContextType {
-  // User Profile
+  // User Authentication & Profile
+  userId: string | null;
+  userEmail: string;
   userName: string;
   userHandle: string;
   userBio: string;
@@ -65,7 +69,21 @@ interface AppContextType {
   targetWeight: number;
   bmi: number;
   calorieGoal: number;
-  updateProfile: (profile: Partial<{ name: string; bio: string; targetWeight: number; calorieGoal: number }>) => void;
+  proteinGoal: number;
+  carbsGoal: number;
+  fatGoal: number;
+  updateProfile: (profile: Partial<{
+    name: string;
+    username: string;
+    bio: string;
+    targetWeight: number;
+    currentWeight: number;
+    calorieGoal: number;
+    proteinGoal: number;
+    carbsGoal: number;
+    fatGoal: number;
+  }>) => Promise<boolean>;
+  signOut: () => Promise<void>;
 
   // Daily Nutrition & Metrics
   consumedKcal: number;
@@ -78,8 +96,8 @@ interface AppContextType {
   workoutMins: number;
   todayMeals: MealItem[];
   addWater: (amount?: number) => void;
-  logMeal: (meal: Omit<MealItem, 'id' | 'logged'>) => void;
-  deleteMeal: (id: string) => void;
+  logMeal: (meal: Omit<MealItem, 'id' | 'logged'>) => Promise<void>;
+  deleteMeal: (id: string) => Promise<void>;
 
   // Rewards & Missions
   claimedVouchers: ClaimedVoucher[];
@@ -97,34 +115,38 @@ interface AppContextType {
   // Toast / Feedback
   toastMessage: string | null;
   showToast: (msg: string) => void;
+  reloadUserData: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export function AppProvider({ children }: { children: ReactNode }) {
+  // Auth state
+  const [userId, setUserId] = useState<string | null>(null);
+  const [userEmail, setUserEmail] = useState('student@utm.my');
+
   // User Profile State
-  const [userName, setUserName] = useState('Hailey Tan');
-  const [userHandle] = useState('@hailey.tan');
-  const [userBio, setUserBio] = useState('Uni life, good food & little wins');
+  const [userName, setUserName] = useState('Hui Zhen');
+  const [userHandle, setUserHandle] = useState('@huizhen');
+  const [userBio, setUserBio] = useState('UTM Software Engineering · Uni life, good food & little wins');
   const [streakDays, setStreakDays] = useState(12);
   const [snapPoints, setSnapPoints] = useState(1450);
-  const [followersCount] = useState(248);
-  const [followingCount] = useState(182);
-  const [groupsCount] = useState(3);
-  const [currentWeight] = useState(48.5);
+  const [followersCount, setFollowersCount] = useState(248);
+  const [followingCount, setFollowingCount] = useState(182);
+  const [groupsCount, setGroupsCount] = useState(3);
+  const [currentWeight, setCurrentWeight] = useState(48.5);
   const [targetWeight, setTargetWeight] = useState(48.0);
-  const [bmi] = useState(19.4);
+  const [bmi, setBmi] = useState(19.4);
   const [calorieGoal, setCalorieGoal] = useState(1850);
+  const [proteinGoal, setProteinGoal] = useState(90);
+  const [carbsGoal, setCarbsGoal] = useState(180);
+  const [fatGoal, setFatGoal] = useState(50);
 
   // Daily Metrics
-  const [consumedKcal, setConsumedKcal] = useState(500);
-  const [burnedKcal] = useState(220);
-  const [proteinGrams, setProteinGrams] = useState(62.5);
-  const [carbsGrams, setCarbsGrams] = useState(45.7);
-  const [fatsGrams, setFatsGrams] = useState(23.6);
+  const [burnedKcal, setBurnedKcal] = useState(220);
   const [waterMl, setWaterMl] = useState(1500);
-  const [stepsCount] = useState(6840);
-  const [workoutMins] = useState(30);
+  const [stepsCount, setStepsCount] = useState(6840);
+  const [workoutMins, setWorkoutMins] = useState(30);
 
   // Toast
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -181,126 +203,365 @@ export function AppProvider({ children }: { children: ReactNode }) {
       carbs: 22,
       fat: 4,
       logged: true,
-      time: '4:00 PM',
+      time: '4:20 PM',
     },
   ]);
 
-  // Vouchers
+  // Derived Macronutrient and Calorie Totals
+  const consumedKcal = todayMeals.filter(m => m.logged).reduce((sum, m) => sum + m.kcal, 0);
+  const proteinGrams = Math.round(todayMeals.filter(m => m.logged).reduce((sum, m) => sum + m.protein, 0) * 10) / 10;
+  const carbsGrams = Math.round(todayMeals.filter(m => m.logged).reduce((sum, m) => sum + m.carbs, 0) * 10) / 10;
+  const fatsGrams = Math.round(todayMeals.filter(m => m.logged).reduce((sum, m) => sum + m.fat, 0) * 10) / 10;
+
+  // Rewards and Vouchers
   const [availableVouchers] = useState<VoucherItem[]>([
-    { id: 'v1', brand: 'Salad Atelier', title: 'RM5 Off Salad Atelier', points: 500, discount: 'RM5 Off', color: '#DDF0D3' },
-    { id: 'v2', brand: 'Boost Juice', title: '15% Off Boost Juice', points: 650, discount: '15% Off', color: '#D8EDF8' },
-    { id: 'v3', brand: 'Tealive', title: 'Tealive Free Upsize', points: 300, discount: 'Free Upsize', color: '#FFEFA0' },
+    {
+      id: 'v1',
+      brand: 'Salad Atelier',
+      title: 'RM5 Off Salad Atelier',
+      points: 500,
+      discount: 'RM5 Off',
+      color: '#DDF0D3',
+    },
+    {
+      id: 'v2',
+      brand: 'Boost Juice',
+      title: '15% Off Boost Juice',
+      points: 650,
+      discount: '15% Off',
+      color: '#D8EDF8',
+    },
+    {
+      id: 'v3',
+      brand: 'Tealive',
+      title: 'Tealive Free Upsize',
+      points: 300,
+      discount: 'Free Upsize',
+      color: '#FFEFA0',
+    },
+    {
+      id: 'v4',
+      brand: 'Subway',
+      title: 'Subway 6-inch Healthy Meal',
+      points: 800,
+      discount: '20% Off',
+      color: '#DDF0D3',
+    },
   ]);
 
   const [claimedVouchers, setClaimedVouchers] = useState<ClaimedVoucher[]>([
-    { id: 'c1', brand: 'Salad Atelier', title: 'RM5 Off Salad Atelier', code: 'SNAP-SALAD-892', expiry: '30 Nov 2026' },
-    { id: 'c2', brand: 'Tealive', title: 'Free Upsize Voucher', code: 'SNAP-TEA-104', expiry: '15 Dec 2026' },
+    {
+      id: 'c1',
+      brand: 'FamilyMart',
+      title: 'RM3 Off Oden Set',
+      code: 'SNAP-FM-9482',
+      expiry: '28 Oct 2026',
+    },
   ]);
 
-  // Social Posts
+  // Social Community Feed
   const [followingPosts, setFollowingPosts] = useState<SocialPost[]>([
     {
       id: 'p1',
-      user: '@mia.eats',
-      place: 'Campus café · 24 min ago',
-      kcal: 'Lunch · 490 kcal',
-      pct: '72% of daily goal',
-      caption: "A little colour between lectures. Who's joining me at the café tomorrow?",
-      likes: 124,
+      user: 'Ryan Koh · Arked Meranti',
+      place: 'Lunch snap · 12:45 PM',
+      kcal: '540 kcal',
+      pct: '29% of daily target',
+      caption: 'Nasi campur with steamed chicken, pak choy & tauhu goreng. Staying clean before evening badminton 🏸',
+      likes: 18,
       liked: false,
-      comments: ['@sara  The best lunch spot on campus!'],
+      comments: ['Solid protein ratio bro!', 'Clean macros!'],
     },
     {
       id: 'p2',
-      user: '@aiden.moves',
-      place: 'North campus · 45 min ago',
-      kcal: 'Lunch · 540 kcal',
-      pct: '79% of daily goal',
-      caption: 'Post-gym bowl secured. Now back to that assignment.',
-      likes: 89,
-      liked: false,
-      comments: ['@hailey.tan  Great protein macro split!'],
+      user: 'Aina Sofea · UTM Scholar Inn',
+      place: 'Breakfast · 8:10 AM',
+      kcal: '380 kcal',
+      pct: '21% of daily target',
+      caption: 'Avocado sourdough & soft-boiled eggs before morning lab. 8-day streak going strong! 🥑🍳',
+      likes: 24,
+      liked: true,
+      comments: ['Inspiring streak Aina!', 'Love the aesthetic'],
     },
   ]);
 
   const [discoverPosts, setDiscoverPosts] = useState<SocialPost[]>([
     {
       id: 'd1',
-      user: '@chloe.cooks',
-      place: 'UTM food finds · 1 hr ago',
-      kcal: 'Lunch · 490 kcal',
-      pct: '72% of daily goal',
-      caption: 'RM12 lunch find near the library. Fresh, filling, and just what I needed.',
-      likes: 215,
+      user: 'Marcus Chen · SUB6 Cafe',
+      place: 'Post-Workout · 3:30 PM',
+      kcal: '620 kcal',
+      pct: '34% of daily target',
+      caption: 'Grilled chicken breast wrap + iced americano. Post gym refuel! 💪',
+      likes: 42,
       liked: false,
-      comments: ['Looks amazing! Which stall?'],
+      comments: ['Gym grind!'],
     },
     {
       id: 'd2',
-      user: '@sara.snaps',
-      place: 'The study café · 2 hrs ago',
-      kcal: 'Lunch · 380 kcal',
-      pct: '65% of daily goal',
-      caption: 'Study break = toast break. Keeping this one on repeat.',
-      likes: 178,
+      user: 'Priya Nair · Scholar Mart',
+      place: 'Snack snap · 4:15 PM',
+      kcal: '160 kcal',
+      pct: '9% of daily target',
+      caption: 'Greek yogurt with fresh blueberries and chia seeds. 🫐',
+      likes: 31,
       liked: false,
-      comments: [],
+      comments: ['So refreshing!'],
     },
   ]);
 
-  // Group Members
+  // Group Circle
   const [groupMembers, setGroupMembers] = useState<GroupMember[]>([
-    { name: 'Hailey', streak: '12d', pct: '27%', slots: 2 },
-    { name: 'Mia', streak: '8d', pct: '72%', slots: 3 },
-    { name: 'Aiden', streak: '14d', pct: '79%', slots: 3 },
-    { name: 'Sara', streak: '8d', pct: '80%', slots: 2, nudged: false },
+    { name: 'Marcus Chen', streak: '🔥 14-day streak', pct: '88% of daily goal', slots: 3 },
+    { name: 'Sarah Lee', streak: '🔥 9-day streak', pct: '74% of daily goal', slots: 2 },
+    { name: 'Amirul Hakim', streak: '🔥 4-day streak', pct: '52% of daily goal', slots: 2 },
+    { name: 'Chloe Lim', streak: '🔥 1-day streak', pct: '38% of daily goal', slots: 1 },
   ]);
 
-  // Actions
-  const addWater = (amount = 250) => {
-    const next = waterMl + amount;
-    setWaterMl(next);
-    if (next >= 2000 && waterMl < 2000) {
-      setSnapPoints((p) => p + 20);
-      showToast('🎉 Reached 2L water goal! +20 SnapPoints awarded.');
-    } else {
-      showToast(`💧 Added ${amount}ml water (${next} / 2,000ml)`);
+  // Load live Supabase user & data
+  const loadUserData = async () => {
+    if (!isSupabaseConfigured) return;
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setUserId(null);
+        return;
+      }
+
+      setUserId(user.id);
+      if (user.email) setUserEmail(user.email);
+
+      // 1. Fetch user profile
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      if (profile) {
+        if (profile.full_name) setUserName(profile.full_name);
+        if (profile.username) setUserHandle(profile.username);
+        if (profile.bio) setUserBio(profile.bio);
+        if (profile.streak_days !== undefined && profile.streak_days !== null) setStreakDays(profile.streak_days);
+        if (profile.snap_points !== undefined && profile.snap_points !== null) setSnapPoints(profile.snap_points);
+        if (profile.current_weight_kg) setCurrentWeight(Number(profile.current_weight_kg));
+        if (profile.target_weight_kg) setTargetWeight(Number(profile.target_weight_kg));
+        if (profile.daily_calorie_target) setCalorieGoal(profile.daily_calorie_target);
+        if (profile.target_protein_g) setProteinGoal(Number(profile.target_protein_g));
+        if (profile.target_carbs_g) setCarbsGoal(Number(profile.target_carbs_g));
+        if (profile.target_fat_g) setFatGoal(Number(profile.target_fat_g));
+
+        // BMI Calculation
+        if (profile.height_cm && profile.current_weight_kg) {
+          const hM = Number(profile.height_cm) / 100;
+          const calculatedBmi = Math.round((Number(profile.current_weight_kg) / (hM * hM)) * 10) / 10;
+          if (calculatedBmi > 10 && calculatedBmi < 60) setBmi(calculatedBmi);
+        }
+      }
+
+      // 2. Fetch today's metrics (water, steps, workout)
+      const today = new Date().toISOString().split('T')[0];
+      const { data: metrics } = await supabase
+        .from('daily_metrics')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('metric_date', today)
+        .maybeSingle();
+
+      if (metrics) {
+        if (metrics.water_ml !== undefined) setWaterMl(metrics.water_ml);
+        if (metrics.steps_count !== undefined) setStepsCount(metrics.steps_count);
+        if (metrics.workout_minutes !== undefined) setWorkoutMins(metrics.workout_minutes);
+        if (metrics.workout_calories_burned !== undefined) setBurnedKcal(metrics.workout_calories_burned);
+      }
+
+      // 3. Fetch today's meals
+      const startOfToday = new Date();
+      startOfToday.setHours(0, 0, 0, 0);
+      const { data: meals } = await supabase
+        .from('meals')
+        .select('*')
+        .eq('user_id', user.id)
+        .gte('logged_at', startOfToday.toISOString())
+        .order('logged_at', { ascending: false });
+
+      if (meals && meals.length > 0) {
+        const mapped: MealItem[] = meals.map((m: any) => ({
+          id: m.id,
+          name: m.name,
+          category: m.category,
+          meta: `${m.category} · Logged`,
+          kcal: m.calories,
+          protein: Number(m.protein_g) || 0,
+          carbs: Number(m.carbs_g) || 0,
+          fat: Number(m.fat_g) || 0,
+          logged: true,
+          time: new Date(m.logged_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          image: m.image_url,
+        }));
+        setTodayMeals(mapped);
+      }
+    } catch (err) {
+      console.warn('Failed to load user data from Supabase:', err);
     }
   };
 
-  const logMeal = (newMeal: Omit<MealItem, 'id' | 'logged'>) => {
-    const id = `m_${Date.now()}`;
-    const meal: MealItem = {
+  useEffect(() => {
+    loadUserData();
+
+    // Listen for auth state changes (login, logout, token refresh)
+    if (isSupabaseConfigured) {
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+        if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
+          loadUserData();
+        } else if (event === 'SIGNED_OUT') {
+          setUserId(null);
+          setUserEmail('');
+        }
+      });
+
+      return () => {
+        subscription.unsubscribe();
+      };
+    }
+  }, []);
+
+  // Water Hydration Action (+250ml)
+  const addWater = async (amount = 250) => {
+    const newWater = Math.max(0, waterMl + amount);
+    setWaterMl(newWater);
+    showToast(`💧 ${amount > 0 ? '+' : ''}${amount}ml Water logged (${newWater}ml total)`);
+
+    if (isSupabaseConfigured && userId) {
+      try {
+        const today = new Date().toISOString().split('T')[0];
+        await supabase.from('daily_metrics').upsert({
+          user_id: userId,
+          metric_date: today,
+          water_ml: newWater,
+        }, { onConflict: 'user_id,metric_date' });
+      } catch (err) {
+        console.warn('Failed to persist water to Supabase:', err);
+      }
+    }
+  };
+
+  // Log Meal Action
+  const logMeal = async (newMeal: Omit<MealItem, 'id' | 'logged'>) => {
+    const tempId = `m_${Date.now()}`;
+    const mealItem: MealItem = {
       ...newMeal,
-      id,
+      id: tempId,
       logged: true,
-      meta: `${newMeal.category} · Logged`,
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      time: newMeal.time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     };
 
-    setTodayMeals((prev) => [meal, ...prev]);
-    setConsumedKcal((k) => k + newMeal.kcal);
-    setProteinGrams((p) => Math.round((p + newMeal.protein) * 10) / 10);
-    setCarbsGrams((c) => Math.round((c + newMeal.carbs) * 10) / 10);
-    setFatsGrams((f) => Math.round((f + newMeal.fat) * 10) / 10);
+    setTodayMeals((prev) => [mealItem, ...prev]);
+    showToast(`🥗 Logged "${newMeal.name}" (+${newMeal.kcal} kcal)`);
 
-    // Award SnapPoints for meal logging
-    setSnapPoints((pts) => pts + 50);
-    showToast(`📸 Logged "${newMeal.name}" (+${newMeal.kcal} kcal) · +50 SnapPoints earned!`);
+    if (isSupabaseConfigured && userId) {
+      try {
+        const { data, error } = await supabase.from('meals').insert({
+          user_id: userId,
+          name: newMeal.name,
+          category: newMeal.category,
+          calories: newMeal.kcal,
+          protein_g: newMeal.protein,
+          carbs_g: newMeal.carbs,
+          fat_g: newMeal.fat,
+          image_url: newMeal.image,
+          logged_at: new Date().toISOString(),
+        }).select().single();
+
+        if (data) {
+          // Replace temp ID with Supabase UUID
+          setTodayMeals((prev) => prev.map((m) => (m.id === tempId ? { ...m, id: data.id } : m)));
+        }
+        if (error) throw error;
+      } catch (err) {
+        console.warn('Failed to save meal to Supabase:', err);
+      }
+    }
   };
 
-  const deleteMeal = (id: string) => {
-    const target = todayMeals.find((m) => m.id === id);
-    if (target && target.logged) {
-      setConsumedKcal((k) => Math.max(0, k - target.kcal));
-      setProteinGrams((p) => Math.max(0, Math.round((p - target.protein) * 10) / 10));
-      setCarbsGrams((c) => Math.max(0, Math.round((c - target.carbs) * 10) / 10));
-      setFatsGrams((f) => Math.max(0, Math.round((f - target.fat) * 10) / 10));
-    }
+  // Delete Meal Action
+  const deleteMeal = async (id: string) => {
     setTodayMeals((prev) => prev.filter((m) => m.id !== id));
     showToast('Meal removed from today.');
+
+    if (isSupabaseConfigured && userId && !id.startsWith('m_')) {
+      try {
+        await supabase.from('meals').delete().eq('id', id);
+      } catch (err) {
+        console.warn('Failed to delete meal in Supabase:', err);
+      }
+    }
   };
 
+  // Profile Update Action
+  const updateProfile = async (patch: Partial<{
+    name: string;
+    username: string;
+    bio: string;
+    targetWeight: number;
+    currentWeight: number;
+    calorieGoal: number;
+    proteinGoal: number;
+    carbsGoal: number;
+    fatGoal: number;
+  }>): Promise<boolean> => {
+    if (patch.name !== undefined) setUserName(patch.name);
+    if (patch.username !== undefined) setUserHandle(patch.username);
+    if (patch.bio !== undefined) setUserBio(patch.bio);
+    if (patch.targetWeight !== undefined) setTargetWeight(patch.targetWeight);
+    if (patch.currentWeight !== undefined) setCurrentWeight(patch.currentWeight);
+    if (patch.calorieGoal !== undefined) setCalorieGoal(patch.calorieGoal);
+    if (patch.proteinGoal !== undefined) setProteinGoal(patch.proteinGoal);
+    if (patch.carbsGoal !== undefined) setCarbsGoal(patch.carbsGoal);
+    if (patch.fatGoal !== undefined) setFatGoal(patch.fatGoal);
+
+    showToast('Profile & Goals updated!');
+
+    if (isSupabaseConfigured && userId) {
+      try {
+        const updatePayload: Record<string, any> = {
+          updated_at: new Date().toISOString(),
+        };
+        if (patch.name !== undefined) updatePayload.full_name = patch.name;
+        if (patch.username !== undefined) updatePayload.username = patch.username;
+        if (patch.bio !== undefined) updatePayload.bio = patch.bio;
+        if (patch.targetWeight !== undefined) updatePayload.target_weight_kg = patch.targetWeight;
+        if (patch.currentWeight !== undefined) updatePayload.current_weight_kg = patch.currentWeight;
+        if (patch.calorieGoal !== undefined) updatePayload.daily_calorie_target = patch.calorieGoal;
+        if (patch.proteinGoal !== undefined) updatePayload.target_protein_g = patch.proteinGoal;
+        if (patch.carbsGoal !== undefined) updatePayload.target_carbs_g = patch.carbsGoal;
+        if (patch.fatGoal !== undefined) updatePayload.target_fat_g = patch.fatGoal;
+
+        const { error } = await supabase
+          .from('profiles')
+          .update(updatePayload)
+          .eq('id', userId);
+
+        if (error) {
+          console.warn('Supabase profile update warning:', error.message);
+        }
+      } catch (err) {
+        console.warn('Failed to persist profile to Supabase:', err);
+      }
+    }
+    return true;
+  };
+
+  // Sign Out
+  const signOut = async () => {
+    await authService.signOut();
+    setUserId(null);
+    setUserEmail('');
+    showToast('Signed out successfully.');
+  };
+
+  // Claim Voucher
   const claimVoucher = (voucher: VoucherItem) => {
     if (snapPoints < voucher.points) {
       return { success: false, message: `Need ${voucher.points - snapPoints} more SnapPoints to claim this voucher.` };
@@ -316,9 +577,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
     setClaimedVouchers((prev) => [claimed, ...prev]);
     showToast(`🎁 Claimed ${voucher.title}! Code: ${code}`);
+
+    if (isSupabaseConfigured && userId) {
+      supabase.from('claimed_vouchers').insert({
+        user_id: userId,
+        voucher_id: voucher.id,
+        voucher_code: code,
+        expires_at: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString(),
+      }).then(() => {});
+    }
+
     return { success: true, message: `Claimed! Voucher added to My Wallet.` };
   };
 
+  // Social actions
   const toggleLikePost = (postId: string, isDiscover = false) => {
     const setter = isDiscover ? setDiscoverPosts : setFollowingPosts;
     setter((prev) =>
@@ -353,17 +625,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     showToast(`🔔 Nudged ${memberName} to log dinner!`);
   };
 
-  const updateProfile = (patch: Partial<{ name: string; bio: string; targetWeight: number; calorieGoal: number }>) => {
-    if (patch.name !== undefined) setUserName(patch.name);
-    if (patch.bio !== undefined) setUserBio(patch.bio);
-    if (patch.targetWeight !== undefined) setTargetWeight(patch.targetWeight);
-    if (patch.calorieGoal !== undefined) setCalorieGoal(patch.calorieGoal);
-    showToast('Profile updated!');
-  };
-
   return (
     <AppContext.Provider
       value={{
+        userId,
+        userEmail,
         userName,
         userHandle,
         userBio,
@@ -376,7 +642,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         targetWeight,
         bmi,
         calorieGoal,
+        proteinGoal,
+        carbsGoal,
+        fatGoal,
         updateProfile,
+        signOut,
 
         consumedKcal,
         burnedKcal,
@@ -404,6 +674,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
         toastMessage,
         showToast,
+        reloadUserData: loadUserData,
       }}
     >
       {children}
