@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
-import { View, TextInput, Pressable } from 'react-native-web';
+import { View, TextInput } from 'react-native-web';
 import { useApp } from '../context/AppContext';
+import SquadTab from '../components/SquadTab';
 import {
   Screen,
   Title,
   Segmented,
   Row,
   Txt,
-  Avatar,
   Ring,
   Post,
   IconBox,
@@ -26,10 +26,8 @@ export default function SocialScreen({ onNavigate, initialTab = 0 }: SocialScree
   const {
     followingPosts,
     discoverPosts,
-    groupMembers,
     toggleLikePost,
     addPostComment,
-    nudgeMember,
     showToast,
   } = useApp();
 
@@ -171,96 +169,8 @@ export default function SocialScreen({ onNavigate, initialTab = 0 }: SocialScree
         </>
       )}
 
-      {/* TAB 2: GROUPS CIRCLE */}
-      {activeTab === 2 && (
-        <>
-          <Title
-            title="Your little circle."
-            sub="Show up for yourself. Cheer for each other."
-            right={<IconBox label="•••" onPress={() => showToast('Group settings: Roomie Diet Squad')} />}
-          />
-
-          {/* Private Circle Card */}
-          <Card style={{ marginBottom: 16 }}>
-            <Row style={{ justifyContent: 'space-between', alignItems: 'center' }}>
-              <View>
-                <Txt s={18} w="800">Roomie Diet Squad</Txt>
-                <Txt s={11} color={c.mute}>4 Members · Private campus circle</Txt>
-              </View>
-              <Pill bg={c.yellow}>Active</Pill>
-            </Row>
-
-            <Card bg={c.yellow} style={{ marginVertical: 12 }}>
-              <Txt s={22} w="800">🔥 42 total streak-days</Txt>
-              <Txt s={11} color={c.mute} style={{ marginTop: 2 }}>
-                Every meal check-in adds to the squad leaderboard!
-              </Txt>
-            </Card>
-
-            <Pressable
-              onPress={() => showToast('📋 Group invite code copied: CALORIE-SQUAD-2026')}
-              style={{ alignItems: 'center', borderWidth: 1, borderColor: c.line, borderRadius: 20, padding: 12, cursor: 'pointer' as any }}
-            >
-              <Txt w="700">+ Invite Friend</Txt>
-            </Pressable>
-          </Card>
-
-          {/* Today's Meal Board */}
-          <Row style={{ justifyContent: 'space-between', marginBottom: 12 }}>
-            <Txt s={17} w="800">Today's meal board</Txt>
-            <Txt s={11} color={c.mute}>15 Oct 2026</Txt>
-          </Row>
-
-          {groupMembers.map((member) => (
-            <Card key={member.name} style={{ flexDirection: 'row', marginBottom: 12, padding: 12 }}>
-              <View style={{ alignItems: 'center', width: 75, borderRightWidth: 1, borderColor: c.line, paddingRight: 8 }}>
-                <Avatar size={40} label={member.name.charAt(0)} />
-                <Txt w="800" style={{ marginTop: 4 }}>{member.name}</Txt>
-                <Txt s={10} color={c.mute}>{member.streak} streak</Txt>
-                <Ring size={40} label={member.pct} />
-              </View>
-
-              <Row style={{ flex: 1, paddingLeft: 8 }}>
-                {['Breakfast', 'Lunch', 'Dinner'].map((slot, i) => (
-                  <View key={slot} style={{ flex: 1, alignItems: 'center', marginHorizontal: 3 }}>
-                    <Txt s={9} color={c.mute}>{slot}</Txt>
-                    {i < member.slots ? (
-                      <View style={{ height: 75, alignSelf: 'stretch', backgroundColor: c.mint, borderRadius: 12, marginTop: 4, alignItems: 'center', justifyContent: 'center' }}>
-                        <Txt s={18}>✓</Txt>
-                      </View>
-                    ) : (
-                      <Pressable
-                        onPress={() => nudgeMember(member.name)}
-                        style={{
-                          height: 75,
-                          alignSelf: 'stretch',
-                          borderRadius: 12,
-                          borderWidth: 1.5,
-                          borderStyle: 'dashed',
-                          borderColor: member.nudged ? c.dark : c.mute,
-                          backgroundColor: member.nudged ? '#e2f0d9' : 'transparent',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          marginTop: 4,
-                          cursor: 'pointer' as any,
-                        }}
-                      >
-                        <Txt s={11} w="700" color={member.nudged ? c.dark : c.ink}>
-                          {member.nudged ? 'Nudged' : 'Nudge'}
-                        </Txt>
-                      </Pressable>
-                    )}
-                  </View>
-                ))}
-              </Row>
-            </Card>
-          ))}
-
-          <Txt s={11} color={c.mute} style={{ textAlign: 'center', marginTop: 8 }}>
-            Meal slots show main campus meals. Totals include daily snacks.
-          </Txt>
-        </>
-      )}
+      {/* TAB 2: GROUPS CIRCLE (Member 5 · Roomie Diet Squad) */}
+      {activeTab === 2 && <SquadTab />}
     </Screen>
   );
 }
