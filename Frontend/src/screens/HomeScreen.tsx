@@ -44,6 +44,22 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
     showToast,
   } = useApp();
 
+  // Water undo — remembers the last quick-add amount so undo subtracts it.
+  // Undo stays pressable as long as there is any water logged today (waterMl > 0).
+  const [lastWaterAdded, setLastWaterAdded] = useState<number>(250);
+
+  const handleAddWater = (amount: number) => {
+    setLastWaterAdded(amount);   // remember which button was pressed last
+    addWater(amount);
+  };
+
+  const handleUndoWater = () => {
+    if (waterMl > 0) {
+      // Subtract the last-used amount, but never go below 0
+      addWater(-Math.min(lastWaterAdded, waterMl));
+    }
+  };
+
   // Quick Add Meal Modal State
   const [showAddMealModal, setShowAddMealModal] = useState(false);
   const [mealName, setMealName] = useState('');
@@ -251,18 +267,31 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
             {Math.round((waterMl / 2000) * 100)}% Hydrated
           </Txt>
 
-          <Row style={{ gap: 6 }}>
+          <Row style={{ gap: 6, flexWrap: 'wrap' }}>
             <Pressable
-              onPress={() => addWater(250)}
+              onPress={() => handleAddWater(250)}
               style={{ flex: 1, paddingVertical: 6, borderRadius: 8, backgroundColor: '#E0F2FE', alignItems: 'center' }}
             >
               <Txt s={11} w="700" color="#0369A1">+250ml</Txt>
             </Pressable>
             <Pressable
-              onPress={() => addWater(-250)}
-              style={{ paddingHorizontal: 8, paddingVertical: 6, borderRadius: 8, backgroundColor: c.bg, alignItems: 'center' }}
+              onPress={() => handleAddWater(500)}
+              style={{ flex: 1, paddingVertical: 6, borderRadius: 8, backgroundColor: '#BAE6FD', alignItems: 'center' }}
             >
-              <Txt s={11} color={c.mute}>-</Txt>
+              <Txt s={11} w="700" color="#0369A1">+500ml</Txt>
+            </Pressable>
+            <Pressable
+              onPress={() => handleAddWater(1000)}
+              style={{ flex: 1, paddingVertical: 6, borderRadius: 8, backgroundColor: '#7DD3FC', alignItems: 'center' }}
+            >
+              <Txt s={11} w="700" color="#0C4A6E">+1L</Txt>
+            </Pressable>
+            <Pressable
+              onPress={handleUndoWater}
+              disabled={waterMl === 0}
+              style={{ paddingHorizontal: 8, paddingVertical: 6, borderRadius: 8, backgroundColor: waterMl > 0 ? '#FEF3C7' : c.bg, alignItems: 'center' }}
+            >
+              <Txt s={11} color={waterMl > 0 ? '#92400E' : c.mute}>↩</Txt>
             </Pressable>
           </Row>
         </Card>

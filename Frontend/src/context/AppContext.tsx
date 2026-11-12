@@ -494,6 +494,43 @@ export function AppProvider({ children }: { children: ReactNode }) {
           setTodayMeals((prev) => prev.map((m) => (m.id === tempId ? { ...m, id: data.id } : m)));
         }
         if (error) throw error;
+
+        // Auto-post to Discover feed after a successful meal log
+        const dailyGoal = calorieGoal || 1850;
+        const pct = Math.round((newMeal.kcal / dailyGoal) * 100);
+        // Use the meal's image if available, otherwise a food placeholder
+        const postImage =
+          newMeal.image && newMeal.image.startsWith('http')
+            ? newMeal.image
+            : `https://source.unsplash.com/400x300/?${encodeURIComponent(newMeal.name + ' food')}`;
+
+        const caption = `Just logged ${newMeal.name} for ${newMeal.category.toLowerCase()} 🍽️ ${newMeal.kcal} kcal · ${newMeal.protein}g protein`;
+
+        await supabase.from('social_posts').insert({
+          user_id: userId,
+          meal_name: newMeal.name,
+          category: newMeal.category,
+          calories: newMeal.kcal,
+          caption,
+          image_url: postImage,
+          daily_goal_pct: pct,
+          likes_count: 0,
+          created_at: new Date().toISOString(),
+        });
+
+        // Optimistically add the post to local Discover feed
+        const newPost: SocialPost = {
+          id: `dp_${Date.now()}`,
+          user: `${userName} · Just now`,
+          place: `${newMeal.category} snap · ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
+          kcal: `${newMeal.kcal} kcal`,
+          pct: `${pct}% of daily target`,
+          caption,
+          likes: 0,
+          liked: false,
+          comments: [],
+        };
+        setDiscoverPosts((prev) => [newPost, ...prev]);
       } catch (err) {
         console.warn('Failed to save meal to Supabase:', err);
       }

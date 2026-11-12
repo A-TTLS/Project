@@ -91,25 +91,32 @@ export default function RegisterPage({
 
   const handleGoogleSignUp = async () => {
     setIsGoogleLoading(true);
-    setMessage({ type: "info", text: "Connecting to Google..." });
+    setMessage({ type: "info", text: "Redirecting to Google..." });
 
     const res = await authService.signInWithGoogle();
-    setIsGoogleLoading(false);
 
-    if (res.success && res.user) {
-      await setCurrentUser(res.user);
-      await reloadUserData();
-      const profile: UserProfile = {
-        name: res.user.name,
-        username: `@${res.user.email.split("@")[0]}`,
-        email: res.user.email,
-      };
-      setMessage({ type: "success", text: `Welcome, ${res.user.name}!` });
-      setTimeout(() => {
-        onCreated(profile);
-      }, 500);
+    // signInWithOAuth triggers a browser redirect — it never returns a user object.
+    // Only treat it as an error if the service explicitly signals failure.
+    if (res.success) {
+      // If a user is returned it means the demo fallback ran (OAuth not yet configured).
+      // Otherwise the browser is already navigating to Google — do nothing.
+      if (res.user) {
+        await setCurrentUser(res.user);
+        await reloadUserData();
+        const profile: UserProfile = {
+          name: res.user.name,
+          username: `@${res.user.email.split("@")[0]}`,
+          email: res.user.email,
+        };
+        setMessage({ type: "success", text: `Welcome, ${res.user.name}!` });
+        setTimeout(() => {
+          onCreated(profile);
+        }, 500);
+      }
+      // No else needed: browser redirect is in progress
     } else {
-      setMessage({ type: "error", text: res.error || "Google sign in failed." });
+      setIsGoogleLoading(false);
+      setMessage({ type: "error", text: res.error || "Google sign in failed. Please try again." });
     }
   };
 
@@ -209,8 +216,8 @@ export default function RegisterPage({
               message.type === "error"
                 ? styles.alertError
                 : message.type === "success"
-                ? styles.alertSuccess
-                : styles.alertInfo,
+                  ? styles.alertSuccess
+                  : styles.alertInfo,
             ]}
           >
             <Text
@@ -219,8 +226,8 @@ export default function RegisterPage({
                 message.type === "error"
                   ? styles.alertErrorText
                   : message.type === "success"
-                  ? styles.alertSuccessText
-                  : styles.alertInfoText,
+                    ? styles.alertSuccessText
+                    : styles.alertInfoText,
               ]}
             >
               {message.text}

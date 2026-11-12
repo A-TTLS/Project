@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { View, Pressable, Image } from 'react-native-web';
+import { View, Pressable, Image, ActivityIndicator } from 'react-native-web';
 import { useApp } from '../context/AppContext';
 import { Row, Txt, IconBox, Pill, TabBar, c, assets } from '../ui';
+import { useMealImageUpload } from '../services/mealImageUpload';
 
 interface ScanScreenProps {
   onNavigate: (screen: string) => void;
@@ -24,6 +25,12 @@ export default function ScanScreen({ onNavigate, onPhotoCaptured }: ScanScreenPr
   const [cameraFacing, setCameraFacing] = useState<'back' | 'front'>('back');
   const [showGalleryModal, setShowGalleryModal] = useState(false);
 
+  // Real photo upload hook
+  const { pickAndUpload, imageUrl: uploadedUrl, isUploading, uploadError } = useMealImageUpload();
+
+  // Preview: show uploaded image in viewfinder if available
+  const viewfinderImage = uploadedUrl ?? assets.hero;
+
   const sampleMeals = [
     { name: 'Hainanese Chicken Rice', kcal: 580, protein: 38, carbs: 65, fat: 18, image: assets.hero },
     { name: 'Salmon Nourish Bowl', kcal: 520, protein: 34, carbs: 45, fat: 20, image: assets.hero },
@@ -34,7 +41,8 @@ export default function ScanScreen({ onNavigate, onPhotoCaptured }: ScanScreenPr
   const handleCapture = (meal = sampleMeals[0]) => {
     showToast('📸 Snapped! AI Vision recognizing ingredients...');
     if (onPhotoCaptured) {
-      onPhotoCaptured(meal);
+      // Attach the real uploaded URL if available, otherwise use the sample image
+      onPhotoCaptured({ ...meal, image: uploadedUrl ?? meal.image });
     }
     setTimeout(() => {
       onNavigate('Scan Result');
@@ -60,7 +68,7 @@ export default function ScanScreen({ onNavigate, onPhotoCaptured }: ScanScreenPr
       <View style={{ height: 380, width: '100%', maxWidth: 540, alignSelf: 'center', marginVertical: 16, position: 'relative', borderRadius: 24, overflow: 'hidden', backgroundColor: '#1a202c', justifyContent: 'center', alignItems: 'center' }}>
         <Image
           accessibilityIgnoresInvertColors
-          source={{ uri: assets.hero }}
+          source={{ uri: viewfinderImage }}
           style={{ width: '100%', height: '100%', opacity: 0.75, objectFit: 'cover' as any }}
         />
 
@@ -94,16 +102,37 @@ export default function ScanScreen({ onNavigate, onPhotoCaptured }: ScanScreenPr
         <Txt s={12} color="#cbd5e1" style={{ marginTop: 4, textAlign: 'center' }}>
           Align your plate within the frame. AI estimates calories and portion size.
         </Txt>
+        {uploadError && (
+          <Txt s={11} color="#fca5a5" style={{ marginTop: 6, textAlign: 'center' }}>
+            ⚠️ {uploadError}
+          </Txt>
+        )}
+        {uploadedUrl && (
+          <Txt s={11} color="#86efac" style={{ marginTop: 6, textAlign: 'center' }}>
+            ✓ Photo ready — tap the shutter to log this meal
+          </Txt>
+        )}
       </View>
 
       {/* Shutter & Tool Controls */}
       <Row style={{ justifyContent: 'space-around', alignItems: 'center', paddingHorizontal: 36, marginTop: 24, marginBottom: 120 }}>
         <Pressable
-          onPress={() => setShowGalleryModal(true)}
+          onPress={() => {
+            // Open native camera/gallery file picker and upload immediately
+            pickAndUpload((url) => {
+              showToast('📷 Photo uploaded! Tap shutter to log.');
+            });
+          }}
           style={{ alignItems: 'center', cursor: 'pointer' as any }}
         >
-          <IconBox size={50} label="img" />
-          <Txt s={11} color="#fff" style={{ marginTop: 4 }}>Gallery</Txt>
+          {isUploading ? (
+            <ActivityIndicator color="#fff" size="small" />
+          ) : (
+            <IconBox size={50} label={uploadedUrl ? '✓' : 'img'} />
+          )}
+          <Txt s={11} color="#fff" style={{ marginTop: 4 }}>
+            {isUploading ? 'Uploading...' : uploadedUrl ? 'Photo Ready' : 'Gallery'}
+          </Txt>
         </Pressable>
 
         {/* Shutter Button */}
@@ -138,36 +167,6 @@ export default function ScanScreen({ onNavigate, onPhotoCaptured }: ScanScreenPr
           <Txt s={11} color="#fff" style={{ marginTop: 4 }}>Flip</Txt>
         </Pressable>
       </Row>
-
-      {/* Gallery Selector Modal */}
-      {showGalleryModal && (
-        <View style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center', padding: 24, zIndex: 99 }}>
-          <View style={{ width: '100%', maxWidth: 400, backgroundColor: c.card, borderRadius: 24, padding: 20 }}>
-            <Row style={{ justifyContent: 'space-between', marginBottom: 12 }}>
-              <Txt s={18} w="800">Select Sample Photo</Txt>
-              <Pressable onPress={() => setShowGalleryModal(false)}>
-                <Txt s={16} color={c.mute}>✕</Txt>
-              </Pressable>
-            </Row>
-            {sampleMeals.map((meal) => (
-              <Pressable
-                key={meal.name}
-                onPress={() => {
-                  setShowGalleryModal(false);
-                  handleCapture(meal);
-                }}
-                style={{ paddingVertical: 12, borderBottomWidth: 1, borderColor: c.line, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}
-              >
-                <View>
-                  <Txt w="700">{meal.name}</Txt>
-                  <Txt s={11} color={c.mute}>{meal.kcal} kcal · {meal.protein}g P · {meal.carbs}g C</Txt>
-                </View>
-                <Txt s={14} color={c.dark}>Select →</Txt>
-              </Pressable>
-            ))}
-          </View>
-        </View>
-      )}
 
       {/* Navigation TabBar */}
       <TabBar active="Scan" onSelectTab={onNavigate} />

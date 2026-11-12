@@ -62,20 +62,27 @@ export default function LoginPage({
 
   const handleGoogleSignIn = async () => {
     setIsGoogleLoading(true);
-    setMessage({ type: "info", text: "Connecting to Google..." });
+    setMessage({ type: "info", text: "Redirecting to Google..." });
 
     const res = await authService.signInWithGoogle();
-    setIsGoogleLoading(false);
 
-    if (res.success && res.user) {
-      await setCurrentUser(res.user);
-      await reloadUserData();
-      setMessage({ type: "success", text: `Welcome back, ${res.user.name}!` });
-      setTimeout(() => {
-        onSignedIn(res.user!.email);
-      }, 500);
+    // signInWithOAuth triggers a browser redirect — it never returns a user object.
+    // Only treat it as an error if the service explicitly signals failure.
+    if (res.success) {
+      // If a user is returned it means the demo fallback ran (OAuth not yet configured).
+      // Otherwise the browser is already navigating to Google — do nothing.
+      if (res.user) {
+        await setCurrentUser(res.user);
+        await reloadUserData();
+        setMessage({ type: "success", text: `Welcome back, ${res.user.name}!` });
+        setTimeout(() => {
+          onSignedIn(res.user!.email);
+        }, 500);
+      }
+      // No else needed: browser redirect is in progress
     } else {
-      setMessage({ type: "error", text: res.error || "Google sign in failed." });
+      setIsGoogleLoading(false);
+      setMessage({ type: "error", text: res.error || "Google sign in failed. Please try again." });
     }
   };
 
