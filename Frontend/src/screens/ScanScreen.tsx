@@ -109,7 +109,7 @@ export default function ScanScreen({ onNavigate, onPhotoCaptured }: ScanScreenPr
         {/* Shutter Button */}
         <Pressable
           onPress={() => handleCapture()}
-          style={({ pressed }) => [
+          style={({ pressed }: any) => [
             {
               width: 80,
               height: 80,
