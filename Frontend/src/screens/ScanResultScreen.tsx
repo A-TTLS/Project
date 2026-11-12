@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { View, Switch, Pressable, Image } from 'react-native-web';
+import { View, Switch, Pressable, Image, ActivityIndicator } from 'react-native-web';
 import { useApp } from '../context/AppContext';
 import { Screen, Row, Txt, Ph, Pill, IconBox, Card, Btn, SectionHead, c, assets } from '../ui';
+import { uploadMealImage } from '../services/mealImageUpload';
 
 interface ScanResultScreenProps {
   onNavigate: (screen: string) => void;
@@ -12,11 +13,13 @@ interface ScanResultScreenProps {
     carbs: number;
     fat: number;
     image?: string;
+    imageFile?: Blob | File;
   };
 }
 
 export default function ScanResultScreen({ onNavigate, capturedMeal }: ScanResultScreenProps) {
-  const { logMeal, showToast } = useApp();
+  const { logMeal, showToast, userId } = useApp();
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const baseMeal = capturedMeal || {
     name: 'Hainanese Chicken Rice',
@@ -41,8 +44,21 @@ export default function ScanResultScreen({ onNavigate, capturedMeal }: ScanResul
   const currentCarbs = Math.round(baseMeal.carbs * mult);
   const currentFat = Math.round(baseMeal.fat * mult);
 
-  const handleLog = () => {
-    logMeal({
+  const handleLog = async () => {
+    setIsSubmitting(true);
+    let finalImageUrl = baseMeal.image;
+
+    // If an image blob was captured from canvas or file and hasn't been uploaded yet
+    if (baseMeal.imageFile && (!finalImageUrl || finalImageUrl.startsWith('data:') || finalImageUrl.startsWith('blob:'))) {
+      try {
+        const uploaded = await uploadMealImage(baseMeal.imageFile, userId || undefined);
+        finalImageUrl = uploaded.publicUrl;
+      } catch (err: any) {
+        console.warn('Storage upload error in ScanResultScreen:', err.message);
+      }
+    }
+
+    await logMeal({
       name: mealName,
       category,
       meta: `${category} · Logged`,
@@ -50,8 +66,10 @@ export default function ScanResultScreen({ onNavigate, capturedMeal }: ScanResul
       protein: currentProtein,
       carbs: currentCarbs,
       fat: currentFat,
-      image: baseMeal.image,
+      image: finalImageUrl,
     });
+
+    setIsSubmitting(false);
 
     if (shareSocial) {
       showToast('📸 Logged and shared with Roomie Diet Squad circle!');
@@ -174,8 +192,8 @@ export default function ScanResultScreen({ onNavigate, capturedMeal }: ScanResul
       </Card>
 
       {/* Log Meal Button */}
-      <Btn bg={c.yellow} onPress={handleLog}>
-        ✓  Log Meal (+50 SnapPoints)
+      <Btn bg={c.yellow} onPress={handleLog} disabled={isSubmitting}>
+        {isSubmitting ? 'Uploading & Logging...' : '✓  Log Meal (+50 SnapPoints)'}
       </Btn>
     </Screen>
   );

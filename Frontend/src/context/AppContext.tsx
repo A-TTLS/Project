@@ -40,6 +40,10 @@ export interface SocialPost {
   kcal: string;
   pct: string;
   caption: string;
+  streak?: number;
+  avatarUrl?: string;
+  image?: string;
+  image_url?: string;
   likes: number;
   liked: boolean;
   comments: string[];
@@ -365,7 +369,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           daily_calorie_target: 1850,
           streak_days: 1,
           snap_points: 100,
-        }).then(() => {});
+        }).then(() => { });
       }
 
       // 2. Fetch today's metrics (water, steps, workout)
@@ -410,13 +414,115 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }));
         setTodayMeals(mapped);
       }
+
+      // 4. Fetch All Public Posts from Supabase social_posts joined with author profile, likes, and comments
+      await fetchPublicPosts(user.id);
     } catch (err) {
       console.warn('Failed to load user data from Supabase:', err);
     }
   };
 
+  // Helper to fetch all public social posts joined across all accounts
+  const fetchPublicPosts = async (currentUserId?: string | null) => {
+    if (!isSupabaseConfigured) return;
+    try {
+      const { data: dbPosts, error } = await supabase
+        .from('social_posts')
+        .select(`
+          id,
+          caption,
+          location_name,
+          image_url,
+          calories,
+          pct_daily_goal,
+          visibility,
+          created_at,
+          profiles:user_id (
+            full_name,
+            username,
+            avatar_url,
+            streak_days
+          ),
+          post_likes (
+            user_id
+          ),
+          post_comments (
+            id,
+            content,
+            created_at,
+            profiles:user_id (
+              username,
+              full_name
+            )
+          )
+        `)
+        .eq('visibility', 'public')
+        .order('created_at', { ascending: false })
+        .limit(30);
+
+      if (error) throw error;
+
+      if (dbPosts && dbPosts.length > 0) {
+        const mappedPosts: SocialPost[] = dbPosts.map((p: any) => {
+          const profile = Array.isArray(p.profiles) ? p.profiles[0] : p.profiles;
+          const authorName = profile?.full_name || profile?.username || 'Campus Foodie';
+          const authorStreak = profile?.streak_days || 1;
+          const authorAvatar = profile?.avatar_url || undefined;
+          const location = p.location_name || 'Campus Spot';
+          const postDate = new Date(p.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' });
+
+          const likesArr = p.post_likes || [];
+          const commentsArr = p.post_comments || [];
+
+          const hasLiked = currentUserId ? likesArr.some((l: any) => l.user_id === currentUserId) : false;
+          const formattedComments = commentsArr.map((cm: any) => {
+            const cmAuthor = Array.isArray(cm.profiles) ? cm.profiles[0] : cm.profiles;
+            const uname = cmAuthor?.username || cmAuthor?.full_name || 'peer';
+            return `${uname.startsWith('@') ? uname : `@${uname}`}  ${cm.content}`;
+          });
+
+          return {
+            id: p.id,
+            user: authorName,
+            place: `${location} · ${postDate}`,
+            kcal: `${p.calories || 0} kcal`,
+            pct: `${p.pct_daily_goal || 0}% of daily target`,
+            caption: p.caption || '',
+            streak: authorStreak,
+            avatarUrl: authorAvatar,
+            image: p.image_url,
+            image_url: p.image_url,
+            likes: likesArr.length,
+            liked: hasLiked,
+            comments: formattedComments,
+          };
+        });
+
+        setDiscoverPosts(mappedPosts);
+      }
+    } catch (err) {
+      console.warn('Failed to load public posts:', err);
+    }
+  };
+
   useEffect(() => {
     loadUserData();
+
+    // ─── Realtime Subscription for social_posts across all users ───────────
+    let channel: any = null;
+    if (isSupabaseConfigured) {
+      channel = supabase
+        .channel('public:social_posts')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'social_posts' },
+          () => {
+            // Re-fetch all public posts whenever any user inserts, updates, or deletes
+            void fetchPublicPosts(userId);
+          }
+        )
+        .subscribe();
+    }
 
     // Listen for auth state changes (login, logout, token refresh)
     if (isSupabaseConfigured) {
@@ -439,6 +545,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       return () => {
         subscription.unsubscribe();
+        if (channel) {
+          supabase.removeChannel(channel);
+        }
       };
     }
   }, []);
@@ -487,6 +596,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           carbs_g: newMeal.carbs,
           fat_g: newMeal.fat,
           image_url: newMeal.image,
+          is_public: true, // Shared meals are viewable by all users under RLS
           logged_at: new Date().toISOString(),
         }).select().single();
 
@@ -508,29 +618,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
         await supabase.from('social_posts').insert({
           user_id: userId,
-          meal_name: newMeal.name,
-          category: newMeal.category,
-          calories: newMeal.kcal,
+          meal_id: data?.id || null,
+          location_name: 'UTM Campus',
           caption,
           image_url: postImage,
-          daily_goal_pct: pct,
-          likes_count: 0,
+          calories: newMeal.kcal,
+          pct_daily_goal: pct,
+          visibility: 'public', // Explicitly public for Discover feed
           created_at: new Date().toISOString(),
         });
 
-        // Optimistically add the post to local Discover feed
-        const newPost: SocialPost = {
-          id: `dp_${Date.now()}`,
-          user: `${userName} · Just now`,
-          place: `${newMeal.category} snap · ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
-          kcal: `${newMeal.kcal} kcal`,
-          pct: `${pct}% of daily target`,
-          caption,
-          likes: 0,
-          liked: false,
-          comments: [],
-        };
-        setDiscoverPosts((prev) => [newPost, ...prev]);
+        // Trigger feed reload to fetch joined profiles & likes
+        void fetchPublicPosts(userId);
       } catch (err) {
         console.warn('Failed to save meal to Supabase:', err);
       }
@@ -641,38 +740,64 @@ export function AppProvider({ children }: { children: ReactNode }) {
         voucher_id: voucher.id,
         voucher_code: code,
         expires_at: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString(),
-      }).then(() => {});
+      }).then(() => { });
     }
 
     return { success: true, message: `Claimed! Voucher added to My Wallet.` };
   };
 
   // Social actions
-  const toggleLikePost = (postId: string, isDiscover = false) => {
+  const toggleLikePost = async (postId: string, isDiscover = false) => {
     const setter = isDiscover ? setDiscoverPosts : setFollowingPosts;
+    let willLike = false;
     setter((prev) =>
       prev.map((p) => {
         if (p.id === postId) {
-          const liked = !p.liked;
-          return { ...p, liked, likes: liked ? p.likes + 1 : p.likes - 1 };
+          willLike = !p.liked;
+          return { ...p, liked: willLike, likes: willLike ? p.likes + 1 : Math.max(0, p.likes - 1) };
         }
         return p;
       })
     );
+
+    if (isSupabaseConfigured && userId && !postId.startsWith('p') && !postId.startsWith('d')) {
+      try {
+        if (willLike) {
+          await supabase.from('post_likes').insert({ post_id: postId, user_id: userId });
+        } else {
+          await supabase.from('post_likes').delete().eq('post_id', postId).eq('user_id', userId);
+        }
+      } catch (err) {
+        console.warn('Failed to persist post like to Supabase:', err);
+      }
+    }
   };
 
-  const addPostComment = (postId: string, comment: string, isDiscover = false) => {
+  const addPostComment = async (postId: string, comment: string, isDiscover = false) => {
     if (!comment.trim()) return;
+    const cleanComment = comment.trim();
     const setter = isDiscover ? setDiscoverPosts : setFollowingPosts;
     setter((prev) =>
       prev.map((p) => {
         if (p.id === postId) {
-          return { ...p, comments: [...p.comments, `${userHandle}  ${comment.trim()}`] };
+          return { ...p, comments: [...p.comments, `${userHandle}  ${cleanComment}`] };
         }
         return p;
       })
     );
     showToast('Comment posted!');
+
+    if (isSupabaseConfigured && userId && !postId.startsWith('p') && !postId.startsWith('d')) {
+      try {
+        await supabase.from('post_comments').insert({
+          post_id: postId,
+          user_id: userId,
+          content: cleanComment,
+        });
+      } catch (err) {
+        console.warn('Failed to persist post comment to Supabase:', err);
+      }
+    }
   };
 
   const nudgeMember = (memberName: string) => {

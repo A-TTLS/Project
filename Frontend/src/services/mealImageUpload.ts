@@ -2,7 +2,7 @@
  * mealImageUpload.ts
  * ------------------
  * Reusable hook + helper for uploading meal photos to Supabase Storage
- * bucket: "meal-snaps"  (create this bucket in Supabase Dashboard → Storage)
+ * bucket: "meals-snap"  (or "meal-snaps" as fallback)
  *
  * Usage in any component:
  *   const { pickAndUpload, imageUrl, isUploading, uploadError, reset } = useMealImageUpload();
@@ -20,24 +20,39 @@ export interface UploadResult {
 
 // ─── Core upload function (can be called standalone) ─────────────────────────
 
-export async function uploadMealImage(file: File): Promise<UploadResult> {
+export async function uploadMealImage(file: File | Blob, userId?: string): Promise<UploadResult> {
   if (!isSupabaseConfigured) {
     throw new Error('Supabase is not configured. Check your .env file.');
   }
 
-  // Unique filename: userId-timestamp.ext  (prevents overwrites)
-  const ext = file.name.split('.').pop() ?? 'jpg';
+  // Determine user folder prefix & unique filename: ${userId}/${Date.now()}.jpg
+  const userPrefix = userId || (await supabase.auth.getUser()).data.user?.id || 'guest';
   const timestamp = Date.now();
-  const filename = `meal_${timestamp}_${Math.random().toString(36).slice(2)}.${ext}`;
+  const filePath = `${userPrefix}/${timestamp}.jpg`;
 
-  // 1. Upload to Supabase Storage bucket "meal-snaps"
-  const { data, error } = await supabase.storage
-    .from('meal-snaps')
-    .upload(filename, file, {
+  // 1. Try uploading to "meals-snap" bucket
+  let bucketName = 'meals-snap';
+  let { data, error } = await supabase.storage
+    .from(bucketName)
+    .upload(filePath, file, {
       cacheControl: '3600',
-      upsert: false,          // never silently overwrite
-      contentType: file.type,
+      upsert: true,
+      contentType: file.type || 'image/jpeg',
     });
+
+  // Fallback to "meal-snaps" if "meals-snap" doesn't exist
+  if (error && (error.message.includes('not found') || (error as any).statusCode === 404)) {
+    bucketName = 'meal-snaps';
+    const retry = await supabase.storage
+      .from(bucketName)
+      .upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: true,
+        contentType: file.type || 'image/jpeg',
+      });
+    data = retry.data;
+    error = retry.error;
+  }
 
   if (error) {
     throw new Error(`Upload failed: ${error.message}`);
@@ -45,14 +60,14 @@ export async function uploadMealImage(file: File): Promise<UploadResult> {
 
   // 2. Get the permanent public URL
   const { data: urlData } = supabase.storage
-    .from('meal-snaps')
-    .getPublicUrl(data.path);
+    .from(bucketName)
+    .getPublicUrl(data!.path);
 
   if (!urlData?.publicUrl) {
     throw new Error('Could not retrieve public URL after upload.');
   }
 
-  return { publicUrl: urlData.publicUrl, path: data.path };
+  return { publicUrl: urlData.publicUrl, path: data!.path };
 }
 
 // ─── React hook ──────────────────────────────────────────────────────────────
@@ -69,7 +84,7 @@ export function useMealImageUpload() {
    * Open the native file / camera picker, then upload on selection.
    * Pass onUploaded callback to receive the public URL immediately.
    */
-  const pickAndUpload = (onUploaded?: (url: string) => void) => {
+  const pickAndUpload = (onUploaded?: (url: string, file?: File) => void) => {
     // Create a hidden input if it doesn't exist yet
     if (!fileInputRef.current) {
       const input = document.createElement('input');
@@ -77,9 +92,7 @@ export function useMealImageUpload() {
 
       // Mobile: show camera AND gallery option
       input.accept = 'image/*';
-      // 'capture' hints mobile browsers to open camera by default.
-      // Remove this attribute if you want gallery-only.
-      input.capture = 'environment'; // 'environment' = rear camera, 'user' = front
+      input.capture = 'environment'; // 'environment' = rear camera
 
       input.style.display = 'none';
       document.body.appendChild(input);
@@ -87,8 +100,6 @@ export function useMealImageUpload() {
     }
 
     const input = fileInputRef.current;
-
-    // Reset so re-selecting the same file still fires onChange
     input.value = '';
 
     input.onchange = async (e) => {
@@ -102,7 +113,7 @@ export function useMealImageUpload() {
       try {
         const { publicUrl } = await uploadMealImage(file);
         setImageUrl(publicUrl);
-        onUploaded?.(publicUrl);
+        onUploaded?.(publicUrl, file);
       } catch (err: any) {
         setUploadError(err.message ?? 'Upload failed.');
       } finally {
@@ -110,7 +121,7 @@ export function useMealImageUpload() {
       }
     };
 
-    input.click(); // programmatically open the file picker
+    input.click();
   };
 
   const reset = () => {
@@ -119,6 +130,7 @@ export function useMealImageUpload() {
     setIsUploading(false);
   };
 
-  return { pickAndUpload, imageUrl, isUploading, uploadError, reset };
+  return { pickAndUpload, imageUrl, isUploading, uploadError, reset, uploadImage: uploadMealImage };
 }
+
 

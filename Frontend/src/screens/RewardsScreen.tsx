@@ -20,6 +20,84 @@ interface RewardsScreenProps {
   onNavigate: (screen: string) => void;
 }
 
+/**
+ * Minimalist "Sketch-style" Vector SVG Icons for Brands / Vouchers
+ * Rendered with clean neutral slate strokes and subtle backgrounds.
+ */
+function BrandSketchIcon({ brand, title }: { brand?: string; title?: string }) {
+  const text = `${brand || ''} ${title || ''}`.toLowerCase();
+
+  // Coffee (Zus Coffee, Starbucks, etc.)
+  if (text.includes('coffee') || text.includes('zus') || text.includes('latte') || text.includes('cafe')) {
+    return (
+      <View style={{ width: 46, height: 46, borderRadius: 14, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#E2E8F0' }}>
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#475569" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M18 8h1a4 4 0 0 1 0 8h-1" />
+          <path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z" />
+          <line x1="6" y1="1" x2="6" y2="4" />
+          <line x1="10" y1="1" x2="10" y2="4" />
+          <line x1="14" y1="1" x2="14" y2="4" />
+        </svg>
+      </View>
+    );
+  }
+
+  // Tea, Boba, Juice, Drinks (Tealive, Boost Juice, Chatime)
+  if (text.includes('tea') || text.includes('tealive') || text.includes('juice') || text.includes('boost') || text.includes('drink') || text.includes('boba')) {
+    return (
+      <View style={{ width: 46, height: 46, borderRadius: 14, backgroundColor: '#F0FDF4', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#DCFCE7' }}>
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#047857" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M7 21h10" />
+          <path d="M12 21a7 7 0 0 1-7-7V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v9a7 7 0 0 1-7 7Z" />
+          <path d="M6 1h12" />
+          <line x1="12" y1="9" x2="12" y2="13" />
+          <line x1="10" y1="11" x2="14" y2="11" />
+        </svg>
+      </View>
+    );
+  }
+
+  // Salad, Healthy Bowls (Salad Atelier, Poke, Healthy Meal)
+  if (text.includes('salad') || text.includes('atelier') || text.includes('bowl') || text.includes('green') || text.includes('healthy')) {
+    return (
+      <View style={{ width: 46, height: 46, borderRadius: 14, backgroundColor: '#ECFDF5', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#A7F3D0' }}>
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M11 20A7 7 0 0 1 4 13h16a7 7 0 0 1-7 7Z" />
+          <path d="M12 9c-1.5-2.5-4-3-6-3 0 2.5 1 5 3 6" />
+          <path d="M12 9c1.5-2.5 4-3 6-3 0 2.5-1 5-3 6" />
+        </svg>
+      </View>
+    );
+  }
+
+  // Sandwich, Subs, Wraps (Subway, Oden, FamilyMart, Bakery)
+  if (text.includes('subway') || text.includes('sandwich') || text.includes('wrap') || text.includes('burger') || text.includes('familymart') || text.includes('oden')) {
+    return (
+      <View style={{ width: 46, height: 46, borderRadius: 14, backgroundColor: '#FFFBEB', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#FDE68A' }}>
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#D97706" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M3 11h18a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2v-2a2 2 0 0 1 2-2Z" />
+          <path d="M4 11V7a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4v4" />
+          <line x1="6" y1="17" x2="6" y2="19" />
+          <line x1="18" y1="17" x2="18" y2="19" />
+        </svg>
+      </View>
+    );
+  }
+
+  // Generic Treat / Gift Voucher Fallback
+  return (
+    <View style={{ width: 46, height: 46, borderRadius: 14, backgroundColor: '#F8FAFC', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#E2E8F0' }}>
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#64748B" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M20 12v10H4V12" />
+        <path d="M2 7h20v5H2z" />
+        <path d="M12 22V7" />
+        <path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z" />
+        <path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z" />
+      </svg>
+    </View>
+  );
+}
+
 // One shape for both live (Supabase) and demo data, so the layout below
 // does not care where the numbers came from.
 interface MissionView {
@@ -314,7 +392,7 @@ export default function RewardsScreen({ onNavigate }: RewardsScreenProps) {
           <Card key={v.id} style={{ marginBottom: 12 }}>
             <Row style={{ justifyContent: 'space-between', alignItems: 'center' }}>
               <Row style={{ alignItems: 'center' }}>
-                <Ph w={46} h={46} label="LOGO" />
+                <BrandSketchIcon brand={v.brand} title={v.title} />
                 <View style={{ marginLeft: 12 }}>
                   <Txt s={11} color={c.mute}>{v.brand}</Txt>
                   <Txt w="800" s={15}>{v.title}</Txt>

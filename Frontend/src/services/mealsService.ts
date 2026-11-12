@@ -61,7 +61,7 @@ export const mealsService = {
         fat_g: meal.fat_g,
         portion_multiplier: meal.portion_multiplier || 1.0,
         image_url: meal.image_url || null,
-        is_public: meal.is_public ?? false,
+        is_public: meal.is_public ?? true, // Default to true so RLS allows public viewing
         logged_at: meal.logged_at || new Date().toISOString(),
       };
 

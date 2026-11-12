@@ -290,6 +290,9 @@ export const Post = ({
   kcal,
   caption,
   pct,
+  streak = 1,
+  avatarUrl,
+  image,
   likes = 124,
   liked = false,
   comments = [],
@@ -301,6 +304,9 @@ export const Post = ({
   kcal: string;
   caption: string;
   pct: string;
+  streak?: number;
+  avatarUrl?: string;
+  image?: string;
   likes?: number;
   liked?: boolean;
   comments?: string[];
@@ -318,13 +324,24 @@ export const Post = ({
             <Txt s={11} color={c.mute}>{place}</Txt>
           </View>
         </Row>
-        <Pill active>14d</Pill>
+        <Pill active>{streak}d streak</Pill>
       </Row>
       <Row style={{ justifyContent: 'space-between', marginVertical: 10 }}>
         <Txt s={12} w="700">{kcal}</Txt>
         <Txt s={11} color={c.mute}>{pct}</Txt>
       </Row>
-      <Ph h={180} r={16} label="MEAL PHOTO" />
+      {image ? (
+        <View style={{ width: '100%', height: 200, borderRadius: 16, overflow: 'hidden', backgroundColor: '#e2e8f0', marginVertical: 4 }}>
+          <img
+            src={image}
+            alt={caption || 'Meal photo'}
+            className="object-cover w-full h-full"
+            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+          />
+        </View>
+      ) : (
+        <Ph h={180} r={16} label="MEAL PHOTO" />
+      )}
       <Row style={{ marginTop: 10, justifyContent: 'space-between' }}>
         <Pressable onPress={onLike} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
           <Txt s={14}>{liked ? '❤️' : '🤍'}</Txt>

@@ -20,6 +20,46 @@ interface HomeScreenProps {
   onNavigate: (screen: string) => void;
 }
 
+/**
+ * Dynamic Emoji Helper for Meals
+ * Maps meal name or category to an appropriate, vibrant food emoji
+ */
+function getMealEmoji(name: string, category: string): string {
+  const n = (name || '').toLowerCase();
+  
+  // Specific food items
+  if (n.includes('pizza')) return '🍕';
+  if (n.includes('burger')) return '🍔';
+  if (n.includes('nasi') || n.includes('rice') || n.includes('biryani')) return '🍛';
+  if (n.includes('chicken') || n.includes('ayam') || n.includes('poultry')) return '🍗';
+  if (n.includes('meat') || n.includes('beef') || n.includes('steak') || n.includes('rendang')) return '🥩';
+  if (n.includes('fish') || n.includes('salmon') || n.includes('tuna') || n.includes('ikan') || n.includes('seafood')) return '🐟';
+  if (n.includes('noodle') || n.includes('ramen') || n.includes('mee') || n.includes('pasta') || n.includes('spaghetti')) return '🍜';
+  if (n.includes('soup') || n.includes('oden') || n.includes('stew') || n.includes('broth')) return '🍲';
+  if (n.includes('salad') || n.includes('veggie') || n.includes('sayur') || n.includes('bowl')) return '🥗';
+  if (n.includes('sandwich') || n.includes('subway') || n.includes('wrap') || n.includes('toast')) return '🥪';
+  if (n.includes('egg') || n.includes('telur') || n.includes('omelet')) return '🍳';
+  if (n.includes('oat') || n.includes('cereal') || n.includes('porridge') || n.includes('bubur')) return '🥣';
+  if (n.includes('bread') || n.includes('roti') || n.includes('canai') || n.includes('croissant')) return '🍞';
+  if (n.includes('coffee') || n.includes('kopi') || n.includes('latte') || n.includes('espresso') || n.includes('cappuccino')) return '☕';
+  if (n.includes('tea') || n.includes('teh') || n.includes('boba') || n.includes('matcha')) return '🧋';
+  if (n.includes('juice') || n.includes('smoothie') || n.includes('water') || n.includes('drink')) return '🥤';
+  if (n.includes('fruit') || n.includes('banana') || n.includes('apple') || n.includes('berry') || n.includes('avocado')) return '🍎';
+  if (n.includes('cake') || n.includes('dessert') || n.includes('donut') || n.includes('cookie') || n.includes('pastry')) return '🍰';
+  if (n.includes('snack') || n.includes('chips') || n.includes('fries') || n.includes('popcorn')) return '🍿';
+  if (n.includes('sushi')) return '🍣';
+  if (n.includes('taco') || n.includes('burrito')) return '🌮';
+
+  // Category fallback
+  switch (category) {
+    case 'Breakfast': return '🍳';
+    case 'Lunch': return '🍱';
+    case 'Dinner': return '🍽️';
+    case 'Snacks': return '🍎';
+    default: return '🥗';
+  }
+}
+
 export default function HomeScreen({ onNavigate }: HomeScreenProps) {
   const {
     userName,
@@ -356,16 +396,17 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
               <Row style={{ alignItems: 'center', gap: 10, flex: 1 }}>
                 <View
                   style={{
-                    width: 38,
-                    height: 38,
-                    borderRadius: 12,
+                    width: 44,
+                    height: 44,
+                    borderRadius: 14,
                     backgroundColor: meal.category === 'Breakfast' ? '#FFEFA0' : meal.category === 'Lunch' ? '#DDF0D3' : meal.category === 'Dinner' ? '#D8EDF8' : '#FBDAD6',
                     alignItems: 'center',
                     justifyContent: 'center',
+                    flexShrink: 0,
                   }}
                 >
-                  <Txt s={18}>
-                    {meal.category === 'Breakfast' ? '🥞' : meal.category === 'Lunch' ? '🍛' : meal.category === 'Dinner' ? '🥗' : '🍎'}
+                  <Txt s={22} style={{ textAlign: 'center', lineHeight: 26 }}>
+                    {getMealEmoji(meal.name, meal.category)}
                   </Txt>
                 </View>
 
