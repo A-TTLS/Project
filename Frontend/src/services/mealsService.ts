@@ -5,6 +5,7 @@
 
 import { supabase, isSupabaseConfigured } from './supabaseClient';
 import { calculateStreakFromDates } from './nutritionService';
+import { uploadMealImage } from './mealImageUpload';
 
 export interface DbMeal {
   id?: string;
@@ -21,6 +22,16 @@ export interface DbMeal {
   logged_at?: string;
 }
 
+export interface MockAIAnalysisResult {
+  meal_name: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  meal_type: 'Breakfast' | 'Lunch' | 'Dinner' | 'Snacks';
+  confidence: number;
+}
+
 export interface FoodCatalogItem {
   id: string;
   name: string;
@@ -34,7 +45,199 @@ export interface FoodCatalogItem {
   tags: string[];
 }
 
+/**
+ * 1. Mock AI Analysis Helper
+ * Simulates a realistic nutritional breakdown with network latency.
+ * 
+ * // TODO: Replace with teammate's real AI scan API when ready!
+ */
+export async function mockAnalyzeFoodPhoto(
+  _fileOrUrl?: File | Blob | string
+): Promise<MockAIAnalysisResult> {
+  // Simulate 1-second network latency
+  await new Promise((resolve) => setTimeout(resolve, 1000));
+
+  const mockDatabase: MockAIAnalysisResult[] = [
+    {
+      meal_name: 'Nasi Lemak Ayam Berempah',
+      calories: 650,
+      protein: 28,
+      carbs: 72,
+      fat: 26,
+      meal_type: 'Lunch',
+      confidence: 0.94,
+    },
+    {
+      meal_name: 'Hainanese Steamed Chicken Rice',
+      calories: 560,
+      protein: 34,
+      carbs: 62,
+      fat: 16,
+      meal_type: 'Lunch',
+      confidence: 0.96,
+    },
+    {
+      meal_name: 'Roti Canai with Dhal & Sambal',
+      calories: 380,
+      protein: 9,
+      carbs: 52,
+      fat: 15,
+      meal_type: 'Breakfast',
+      confidence: 0.92,
+    },
+    {
+      meal_name: 'Subway 6-inch Roasted Chicken Breast',
+      calories: 320,
+      protein: 26,
+      carbs: 42,
+      fat: 5,
+      meal_type: 'Dinner',
+      confidence: 0.98,
+    },
+    {
+      meal_name: 'Greek Yogurt with Mixed Berries & Chia',
+      calories: 220,
+      protein: 18,
+      carbs: 26,
+      fat: 4,
+      meal_type: 'Breakfast',
+      confidence: 0.95,
+    },
+  ];
+
+  // Pick a realistic campus dish
+  const randomIndex = Math.floor(Math.random() * mockDatabase.length);
+  return mockDatabase[randomIndex];
+}
+
 export const mealsService = {
+  /**
+   * 2. Log Meal with Social Share
+   * Handles optional photo storage upload, inserts into meals table (is_public: true),
+   * and auto-creates a linked public social_posts record for the Discover feed.
+   */
+  async logMealWithSocialShare(
+    meal: Omit<DbMeal, 'id' | 'user_id'>,
+    photoFile?: File | Blob,
+    currentUserId?: string
+  ): Promise<{ success: boolean; meal?: any; post?: any; error?: string }> {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const targetUserId = currentUserId || user?.id;
+
+      if (!targetUserId) {
+        return { success: false, error: 'User is not authenticated' };
+      }
+
+      // Step A: Upload photo if a File/Blob is provided
+      let finalImageUrl = meal.image_url || null;
+      if (photoFile) {
+        try {
+          const uploadRes = await uploadMealImage(photoFile, targetUserId);
+          finalImageUrl = uploadRes.publicUrl;
+        } catch (uploadErr: any) {
+          console.warn('Photo upload fallback warning:', uploadErr.message);
+        }
+      }
+
+      // Step B: Insert into public.meals (setting is_public: true)
+      const mealPayload = {
+        user_id: targetUserId,
+        name: meal.name,
+        category: meal.category,
+        calories: Math.round(meal.calories),
+        protein_g: Number(meal.protein_g) || 0,
+        carbs_g: Number(meal.carbs_g) || 0,
+        fat_g: Number(meal.fat_g) || 0,
+        portion_multiplier: meal.portion_multiplier || 1.0,
+        image_url: finalImageUrl,
+        is_public: true, // Always true so RLS policies permit shared viewing
+        logged_at: meal.logged_at || new Date().toISOString(),
+      };
+
+      const { data: createdMeal, error: mealError } = await supabase
+        .from('meals')
+        .insert(mealPayload)
+        .select()
+        .single();
+
+      if (mealError) throw mealError;
+
+      // Step C: Automatically insert linked post into public.social_posts
+      const caption = `Just logged ${meal.name} for ${meal.category.toLowerCase()} 🍽️ ${Math.round(meal.calories)} kcal · ${meal.protein_g}g protein`;
+      const postPayload = {
+        user_id: targetUserId,
+        meal_id: createdMeal?.id || null,
+        caption,
+        location_name: 'UTM Campus',
+        image_url: finalImageUrl || `https://source.unsplash.com/400x300/?${encodeURIComponent(meal.name + ' food')}`,
+        calories: Math.round(meal.calories),
+        pct_daily_goal: Math.min(100, Math.round((meal.calories / 1850) * 100)),
+        visibility: 'public', // Appears immediately on shared Discover feed
+        created_at: new Date().toISOString(),
+      };
+
+      const { data: createdPost, error: postError } = await supabase
+        .from('social_posts')
+        .insert(postPayload)
+        .select()
+        .single();
+
+      if (postError) {
+        console.warn('Social post insert notice:', postError.message);
+      }
+
+      return {
+        success: true,
+        meal: createdMeal,
+        post: createdPost,
+      };
+    } catch (err: any) {
+      console.error('Error in logMealWithSocialShare:', err);
+      return { success: false, error: err.message || 'Failed to log meal and share' };
+    }
+  },
+
+  /**
+   * 3. Food & Meals Search Function
+   * Searches both logged meals and the Malaysian campus food catalog
+   * with case-insensitive pattern matching (.ilike) and optional nutrition filters.
+   */
+  async searchMealsAndFoods(
+    q = '',
+    filters?: { maxCalories?: number; highProtein?: boolean }
+  ): Promise<any[]> {
+    if (!isSupabaseConfigured) return [];
+
+    try {
+      const searchTerm = q.trim();
+      let query = supabase
+        .from('food_catalog')
+        .select('*');
+
+      if (searchTerm) {
+        query = query.ilike('name', `%${searchTerm}%`);
+      }
+
+      if (filters?.maxCalories) {
+        query = query.lte('calories', filters.maxCalories);
+      }
+
+      if (filters?.highProtein) {
+        query = query.gte('protein_g', 20);
+      }
+
+      const { data: catalogResults, error: catalogError } = await query
+        .order('calories', { ascending: true })
+        .limit(20);
+
+      if (catalogError) throw catalogError;
+      return catalogResults || [];
+    } catch (err: any) {
+      console.error('Error searching meals and foods:', err);
+      return [];
+    }
+  },
   /**
    * 1. Log a new meal to public.meals and sync with daily_metrics
    */

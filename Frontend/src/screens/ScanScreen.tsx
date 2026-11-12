@@ -3,6 +3,7 @@ import { View, Pressable, Image, ActivityIndicator } from 'react-native-web';
 import { useApp } from '../context/AppContext';
 import { Row, Txt, IconBox, Pill, TabBar, c, assets } from '../ui';
 import { uploadMealImage } from '../services/mealImageUpload';
+import { mockAnalyzeFoodPhoto } from '../services/mealsService';
 
 interface ScanScreenProps {
   onNavigate: (screen: string) => void;
@@ -97,7 +98,7 @@ export default function ScanScreen({ onNavigate, onPhotoCaptured }: ScanScreenPr
   // Handle capture: snap from live video canvas or fallback
   const handleSnap = async () => {
     setIsProcessing(true);
-    showToast('📸 Snapping photo...');
+    showToast('📸 Snapping & analyzing food with AI...');
 
     let photoBlob: Blob | null = null;
     let previewDataUrl: string | null = null;
@@ -121,7 +122,10 @@ export default function ScanScreen({ onNavigate, onPhotoCaptured }: ScanScreenPr
       }
     }
 
-    const randomMeal = sampleMeals[Math.floor(Math.random() * sampleMeals.length)];
+    // Call Mock AI photo analysis helper
+    // TODO: Replace with teammate's real AI scan API when ready!
+    const aiAnalysis = await mockAnalyzeFoodPhoto(photoBlob || undefined);
+
     const chosenImage = previewDataUrl || capturedPreview || assets.hero;
 
     // Upload immediately if we have a blob
@@ -140,7 +144,11 @@ export default function ScanScreen({ onNavigate, onPhotoCaptured }: ScanScreenPr
 
     if (onPhotoCaptured) {
       onPhotoCaptured({
-        ...randomMeal,
+        name: aiAnalysis.meal_name,
+        kcal: aiAnalysis.calories,
+        protein: aiAnalysis.protein,
+        carbs: aiAnalysis.carbs,
+        fat: aiAnalysis.fat,
         image: uploadedPublicUrl || chosenImage,
         imageFile: photoBlob || undefined,
       });
@@ -155,21 +163,29 @@ export default function ScanScreen({ onNavigate, onPhotoCaptured }: ScanScreenPr
     if (!file) return;
 
     setIsProcessing(true);
-    showToast('Uploading selected photo...');
+    showToast('Analyzing selected photo with AI...');
 
     const preview = URL.createObjectURL(file);
     setCapturedPreview(preview);
 
     try {
+      // 1. Analyze with Mock AI
+      // TODO: Replace with teammate's real AI scan API when ready!
+      const aiAnalysis = await mockAnalyzeFoodPhoto(file);
+
+      // 2. Upload photo
       const res = await uploadMealImage(file, userId || undefined);
-      showToast('Photo uploaded! Tap snap or review meal.');
-      const randomMeal = sampleMeals[0];
+      showToast('Photo uploaded & meal analyzed!');
       stopCamera();
       setIsProcessing(false);
 
       if (onPhotoCaptured) {
         onPhotoCaptured({
-          ...randomMeal,
+          name: aiAnalysis.meal_name,
+          kcal: aiAnalysis.calories,
+          protein: aiAnalysis.protein,
+          carbs: aiAnalysis.carbs,
+          fat: aiAnalysis.fat,
           image: res.publicUrl,
           imageFile: file,
         });
@@ -265,8 +281,8 @@ export default function ScanScreen({ onNavigate, onPhotoCaptured }: ScanScreenPr
           {cameraActive
             ? 'Camera active. Frame your plate and tap the button to snap!'
             : cameraError
-            ? cameraError
-            : 'Align your plate within the frame. Tap Gallery to upload a photo.'}
+              ? cameraError
+              : 'Align your plate within the frame. Tap Gallery to upload a photo.'}
         </Txt>
       </View>
 
