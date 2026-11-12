@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { View, ScrollView, Pressable } from 'react-native-web';
-import { useApp, type VoucherItem } from '../context/AppContext';
+import { useApp } from '../context/AppContext';
+import { useRewards } from '../hooks/useRewards';
+import type { MissionType, Voucher } from '../services/rewardsService';
 import {
   Screen,
   Row,
@@ -18,52 +20,169 @@ interface RewardsScreenProps {
   onNavigate: (screen: string) => void;
 }
 
+// One shape for both live (Supabase) and demo data, so the layout below
+// does not care where the numbers came from.
+interface MissionView {
+  key: string;
+  missionId: string | null;
+  title: string;
+  subtitle: string;
+  reward: number;
+  progress: number;
+  done: boolean;
+  claimed: boolean;
+}
+
+interface VoucherView {
+  id: string;
+  brand: string;
+  title: string;
+  discount: string;
+  points: number;
+  color: string;
+  live?: Voucher;
+}
+
+interface WalletView {
+  id: string;
+  title: string;
+  code: string;
+  expiry: string;
+  status: string;
+}
+
+const MISSION_TITLES: Record<MissionType, string> = {
+  snap_3_meals: 'Snap 3 meals',
+  steps_8000: 'Hit 8,000 steps',
+  water_2000: 'Drink 2L water',
+};
+
+function missionSubtitle(type: MissionType, current: number, target: number): string {
+  if (type === 'snap_3_meals') return `${current} of ${target} logged`;
+  if (type === 'steps_8000') return `${current.toLocaleString()} of ${target.toLocaleString()} steps`;
+  return `${current.toLocaleString()} of ${target.toLocaleString()} ml`;
+}
+
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
 export default function RewardsScreen({ onNavigate }: RewardsScreenProps) {
-  const {
-    snapPoints,
-    streakDays,
-    waterMl,
-    stepsCount,
-    todayMeals,
-    availableVouchers,
-    claimedVouchers,
-    claimVoucher,
-    showToast,
-  } = useApp();
-
+  const demo = useApp();
+  const rewards = useRewards();
   const [showWallet, setShowWallet] = useState(false);
+  const [busy, setBusy] = useState(false);
 
-  const loggedMealsCount = todayMeals.filter((m) => m.logged).length;
+  const live = rewards.isLive;
+  const snapPoints = live ? rewards.snapPoints : demo.snapPoints;
+  const streakDays = live ? rewards.streakDays : demo.streakDays;
+  const todayLabel = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 
-  const missions = [
-    {
-      title: 'Snap 3 meals',
-      subtitle: `${Math.min(3, loggedMealsCount)} of 3 logged · ${loggedMealsCount >= 3 ? 'Completed!' : 'Keep snapping'}`,
-      points: '+50 pts',
-      progress: Math.min(1, loggedMealsCount / 3),
-      done: loggedMealsCount >= 3,
-    },
-    {
-      title: 'Hit 8,000 steps',
-      subtitle: `${stepsCount.toLocaleString()} of 8,000 steps`,
-      points: '+30 pts',
-      progress: Math.min(1, stepsCount / 8000),
-      done: stepsCount >= 8000,
-    },
-    {
-      title: 'Drink 2L water',
-      subtitle: `${waterMl.toLocaleString()} of 2,000 ml`,
-      points: '+20 pts',
-      progress: Math.min(1, waterMl / 2000),
-      done: waterMl >= 2000,
-    },
-  ];
+  // ---- Missions -----------------------------------------------------------
+  const demoMealsLogged = demo.todayMeals.filter((m) => m.logged).length;
+  const missions: MissionView[] = live
+    ? rewards.missions.map((m) => ({
+        key: m.id,
+        missionId: m.id,
+        title: MISSION_TITLES[m.mission_type],
+        subtitle: missionSubtitle(m.mission_type, m.current_progress, m.target_progress),
+        reward: m.points_reward,
+        progress: Math.min(1, m.current_progress / m.target_progress),
+        done: m.is_completed,
+        claimed: m.is_claimed,
+      }))
+    : [
+        {
+          key: 'demo-meals',
+          missionId: null,
+          title: MISSION_TITLES.snap_3_meals,
+          subtitle: missionSubtitle('snap_3_meals', Math.min(3, demoMealsLogged), 3),
+          reward: 50,
+          progress: Math.min(1, demoMealsLogged / 3),
+          done: demoMealsLogged >= 3,
+          claimed: demoMealsLogged >= 3,
+        },
+        {
+          key: 'demo-steps',
+          missionId: null,
+          title: MISSION_TITLES.steps_8000,
+          subtitle: missionSubtitle('steps_8000', demo.stepsCount, 8000),
+          reward: 30,
+          progress: Math.min(1, demo.stepsCount / 8000),
+          done: demo.stepsCount >= 8000,
+          claimed: demo.stepsCount >= 8000,
+        },
+        {
+          key: 'demo-water',
+          missionId: null,
+          title: MISSION_TITLES.water_2000,
+          subtitle: missionSubtitle('water_2000', demo.waterMl, 2000),
+          reward: 20,
+          progress: Math.min(1, demo.waterMl / 2000),
+          done: demo.waterMl >= 2000,
+          claimed: demo.waterMl >= 2000,
+        },
+      ];
 
-  const handleClaim = (v: VoucherItem) => {
-    const res = claimVoucher(v);
-    if (!res.success) {
-      alert(res.message);
+  // ---- Vouchers and wallet ---------------------------------------------------
+  const vouchers: VoucherView[] = live
+    ? rewards.vouchers.map((v) => ({
+        id: v.id,
+        brand: v.brand,
+        title: v.title,
+        discount: v.discount_label,
+        points: v.points_cost,
+        color: v.color_hex,
+        live: v,
+      }))
+    : demo.availableVouchers;
+
+  const wallet: WalletView[] = live
+    ? rewards.wallet.map((w) => ({
+        id: w.id,
+        title: w.title,
+        code: w.voucher_code,
+        expiry: formatDate(w.expires_at),
+        status: w.status,
+      }))
+    : demo.claimedVouchers.map((w) => ({ ...w, status: 'active' }));
+
+  const activeWallet = wallet.filter((w) => w.status === 'active');
+
+  // ---- Actions --------------------------------------------------------------
+  const handleClaimMission = async (m: MissionView) => {
+    if (!live || !m.missionId || !m.done || m.claimed || busy) return;
+    setBusy(true);
+    const res = await rewards.claim(m.missionId);
+    setBusy(false);
+    if (res.success) demo.showToast(`🎉 +${m.reward} SnapPoints · ${m.title}`);
+    else alert(res.message);
+  };
+
+  const handleClaimVoucher = async (v: VoucherView) => {
+    if (busy) return;
+    if (live && v.live) {
+      setBusy(true);
+      const res = await rewards.redeem(v.live);
+      setBusy(false);
+      if (res.success) demo.showToast(`🎁 ${res.message}`);
+      else alert(res.message);
+      return;
     }
+    const res = demo.claimVoucher(v);
+    if (!res.success) alert(res.message);
+  };
+
+  const missionPill = (m: MissionView) => {
+    if (m.claimed) return <Pill active bg={c.mint}>Claimed</Pill>;
+    if (m.done && live) {
+      return (
+        <Pill active bg={c.yellow} onPress={() => handleClaimMission(m)}>
+          {`Claim +${m.reward}`}
+        </Pill>
+      );
+    }
+    return <Pill>{`+${m.reward} pts`}</Pill>;
   };
 
   return (
@@ -81,6 +200,21 @@ export default function RewardsScreen({ onNavigate }: RewardsScreenProps) {
         Turn your daily nutrition and activity consistency into real campus treats.
       </Txt>
 
+      {!live && !rewards.loading && (
+        <Txt s={11} color={c.mute} style={{ marginBottom: 10 }}>
+          Showing demo data. Sign in to see your own rewards.
+        </Txt>
+      )}
+      {rewards.error && (
+        <Card bg="#fdecec" style={{ marginBottom: 12 }}>
+          <Txt s={12} w="700">Could not load your rewards</Txt>
+          <Txt s={11} color={c.mute} style={{ marginTop: 2 }}>{rewards.error}</Txt>
+          <View style={{ marginTop: 8, alignSelf: 'flex-start' }}>
+            <Pill onPress={() => void rewards.reload()}>Try again</Pill>
+          </View>
+        </Card>
+      )}
+
       {/* SnapPoints Balance Card */}
       <Card bg={c.yellow}>
         <Row style={{ justifyContent: 'space-between', alignItems: 'center' }}>
@@ -88,37 +222,37 @@ export default function RewardsScreen({ onNavigate }: RewardsScreenProps) {
           <IconBox size={28} label="⏱" />
         </Row>
         <Txt s={44} w="800" style={{ marginVertical: 8 }}>
-          {snapPoints.toLocaleString()}
+          {rewards.loading && live ? '…' : snapPoints.toLocaleString()}
         </Txt>
         <Txt s={12} style={{ marginBottom: 14 }}>
           🔥 {streakDays}-Day Active Streak
         </Txt>
 
         <Btn bg={c.card} onPress={() => setShowWallet(true)}>
-          My Wallet · {claimedVouchers.length} active vouchers
+          My Wallet · {activeWallet.length} active vouchers
         </Btn>
       </Card>
 
       {/* Daily Missions */}
       <Row style={{ justifyContent: 'space-between', marginTop: 22, marginBottom: 10 }}>
         <Txt s={16} w="800">Daily missions</Txt>
-        <Txt s={11} color={c.mute}>Today · 15 Oct</Txt>
+        <Txt s={11} color={c.mute}>Today · {todayLabel}</Txt>
       </Row>
 
       <Card>
         {missions.map((m, i) => (
-          <View key={m.title} style={{ marginBottom: i < missions.length - 1 ? 16 : 0 }}>
+          <View key={m.key} style={{ marginBottom: i < missions.length - 1 ? 16 : 0 }}>
             <Row style={{ justifyContent: 'space-between', alignItems: 'center' }}>
               <Row style={{ flex: 1, alignItems: 'center' }}>
                 <IconBox size={30} label={m.done ? '✓' : '🎯'} />
                 <View style={{ marginLeft: 10 }}>
                   <Txt w="700">{m.title}</Txt>
-                  <Txt s={11} color={c.mute}>{m.subtitle}</Txt>
+                  <Txt s={11} color={c.mute}>
+                    {m.subtitle} · {m.claimed ? 'Claimed' : m.done ? 'Ready to claim!' : 'Keep going'}
+                  </Txt>
                 </View>
               </Row>
-              <Pill active={m.done} bg={m.done ? c.mint : undefined}>
-                {m.done ? 'Claimed' : m.points}
-              </Pill>
+              {missionPill(m)}
             </Row>
 
             <View style={{ height: 6, borderRadius: 3, backgroundColor: c.block, marginTop: 8, overflow: 'hidden' }}>
@@ -126,14 +260,6 @@ export default function RewardsScreen({ onNavigate }: RewardsScreenProps) {
             </View>
           </View>
         ))}
-      </Card>
-
-      {/* Yesterday Milestone */}
-      <Card bg={c.green} style={{ marginTop: 12 }}>
-        <Txt s={12} w="700">Yesterday: Snap 3 meals · +50 pts</Txt>
-        <Txt s={10} color={c.mute} style={{ marginTop: 2 }}>
-          14 Oct · Added to your balance · Claimed
-        </Txt>
       </Card>
 
       {/* Claim Vouchers Carousel */}
@@ -144,10 +270,10 @@ export default function RewardsScreen({ onNavigate }: RewardsScreenProps) {
         style={{ marginHorizontal: -20 }}
         contentContainerStyle={{ paddingHorizontal: 20 }}
       >
-        {availableVouchers.map((v) => (
+        {vouchers.map((v) => (
           <Pressable
             key={v.id}
-            onPress={() => handleClaim(v)}
+            onPress={() => handleClaimVoucher(v)}
             style={{ cursor: 'pointer' as any }}
           >
             <Card
@@ -175,35 +301,48 @@ export default function RewardsScreen({ onNavigate }: RewardsScreenProps) {
       {/* Partner Treats List */}
       <Row style={{ justifyContent: 'space-between', marginTop: 20, marginBottom: 4 }}>
         <Txt s={16} w="800">All partner treats</Txt>
-        <Txt s={11} color={c.mute}>{availableVouchers.length} vouchers</Txt>
+        <Txt s={11} color={c.mute}>{vouchers.length} vouchers</Txt>
       </Row>
       <Txt s={11} color={c.mute} style={{ marginBottom: 12 }}>
         Turn your SnapPoints into your next campus pick-me-up.
       </Txt>
 
-      {availableVouchers.map((v) => (
-        <Card key={v.id} style={{ marginBottom: 12 }}>
-          <Row style={{ justifyContent: 'space-between', alignItems: 'center' }}>
-            <Row style={{ alignItems: 'center' }}>
-              <Ph w={46} h={46} label="LOGO" />
-              <View style={{ marginLeft: 12 }}>
-                <Txt s={11} color={c.mute}>{v.brand}</Txt>
-                <Txt w="800" s={15}>{v.title}</Txt>
-              </View>
+      {vouchers.map((v) => {
+        const outOfStock = v.live?.stock === 0;
+        const affordable = snapPoints >= v.points;
+        return (
+          <Card key={v.id} style={{ marginBottom: 12 }}>
+            <Row style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+              <Row style={{ alignItems: 'center' }}>
+                <Ph w={46} h={46} label="LOGO" />
+                <View style={{ marginLeft: 12 }}>
+                  <Txt s={11} color={c.mute}>{v.brand}</Txt>
+                  <Txt w="800" s={15}>{v.title}</Txt>
+                </View>
+              </Row>
+              <Pill bg={c.yellow}>{v.points} pts</Pill>
             </Row>
-            <Pill bg={c.yellow}>{v.points} pts</Pill>
-          </Row>
 
-          <Row style={{ justifyContent: 'space-between', marginVertical: 10 }}>
-            <Txt s={11} color={c.mute}>In-store · Selected campus outlets</Txt>
-            <Txt s={11} color={c.dark} w="600">Points available: {snapPoints}</Txt>
-          </Row>
+            <Row style={{ justifyContent: 'space-between', marginVertical: 10 }}>
+              <Txt s={11} color={c.mute}>
+                {v.live?.stock != null ? `${v.live.stock} left` : 'In-store · Selected campus outlets'}
+              </Txt>
+              <Txt s={11} color={c.dark} w="600">Points available: {snapPoints}</Txt>
+            </Row>
 
-          <Btn bg={snapPoints >= v.points ? c.yellow : c.block} onPress={() => handleClaim(v)}>
-            {snapPoints >= v.points ? 'Claim Voucher' : `Need ${v.points - snapPoints} more pts`}
-          </Btn>
-        </Card>
-      ))}
+            <Btn
+              bg={affordable && !outOfStock ? c.yellow : c.block}
+              onPress={() => handleClaimVoucher(v)}
+            >
+              {outOfStock
+                ? 'Out of stock'
+                : affordable
+                  ? busy ? 'Claiming…' : 'Claim Voucher'
+                  : `Need ${v.points - snapPoints} more pts`}
+            </Btn>
+          </Card>
+        );
+      })}
 
       <Txt s={10} color={c.mute} style={{ textAlign: 'center', marginTop: 8, marginBottom: 24 }}>
         Partner terms apply. Vouchers appear in My Wallet immediately after claiming.
@@ -224,20 +363,27 @@ export default function RewardsScreen({ onNavigate }: RewardsScreenProps) {
               Present voucher code to the cashier during checkout.
             </Txt>
 
-            {claimedVouchers.length === 0 ? (
+            {wallet.length === 0 ? (
               <View style={{ padding: 24, alignItems: 'center' }}>
                 <Txt color={c.mute}>No claimed vouchers yet. Complete daily missions to earn points!</Txt>
               </View>
             ) : (
-              claimedVouchers.map((v) => (
+              wallet.map((v) => (
                 <Card key={v.id} bg="#f8fafc" style={{ borderWidth: 1, borderColor: '#cbd5e1', gap: 6 }}>
                   <Row style={{ justifyContent: 'space-between' }}>
                     <Txt w="700">{v.title}</Txt>
-                    <Pill bg={c.mint}>Active</Pill>
+                    <Pill bg={v.status === 'active' ? c.mint : c.block}>
+                      {v.status === 'active' ? 'Active' : v.status === 'redeemed' ? 'Used' : 'Expired'}
+                    </Pill>
                   </Row>
                   <Row style={{ backgroundColor: '#fff', padding: 10, borderRadius: 10, justifyContent: 'space-between', alignItems: 'center', marginVertical: 4 }}>
                     <Txt s={16} w="800" color={c.dark}>{v.code}</Txt>
-                    <Pressable onPress={() => showToast(`Copied code: ${v.code}`)}>
+                    <Pressable
+                      onPress={() => {
+                        void navigator.clipboard?.writeText(v.code);
+                        demo.showToast(`Copied code: ${v.code}`);
+                      }}
+                    >
                       <Txt s={11} color={c.mute}>Copy</Txt>
                     </Pressable>
                   </Row>
