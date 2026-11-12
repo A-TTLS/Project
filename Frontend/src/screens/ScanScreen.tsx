@@ -281,8 +281,8 @@ export default function ScanScreen({ onNavigate, onPhotoCaptured }: ScanScreenPr
           {cameraActive
             ? 'Camera active. Frame your plate and tap the button to snap!'
             : cameraError
-              ? cameraError
-              : 'Align your plate within the frame. Tap Gallery to upload a photo.'}
+            ? cameraError
+            : 'Align your plate within the frame. Tap Gallery to upload a photo.'}
         </Txt>
       </View>
 
