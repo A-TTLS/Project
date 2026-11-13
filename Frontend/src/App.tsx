@@ -51,7 +51,7 @@ function AppContent() {
   });
   const [activityLevel, setActivityLevel] = useState<ActivityLevel>('moderate');
 
-  const { toastMessage } = useApp();
+  const { toastMessage, reloadUserData } = useApp();
 
   const allScreens = [
     'Home',
@@ -159,7 +159,10 @@ function AppContent() {
             level={activityLevel}
             measurements={measurements}
             onBack={() => setCurrentScreen('Profile Setup')}
-            onComplete={() => setCurrentScreen('Home')}
+            onComplete={async () => {
+              await reloadUserData();
+              setCurrentScreen('Home');
+            }}
             onLevelChange={setActivityLevel}
           />
         );

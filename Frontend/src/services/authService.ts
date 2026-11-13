@@ -166,26 +166,52 @@ export const authService = {
   /**
    * Save user measurement and activity goals to Supabase `profiles` table
    */
-  async saveOnboarding(measurements: UserMeasurements, activity: ActivityLevel): Promise<boolean> {
+  async saveOnboarding(
+    measurements: UserMeasurements,
+    activity: ActivityLevel,
+    targets?: { kcal: number; carbs: number; protein: number; fat: number }
+  ): Promise<boolean> {
+    const imperial = measurements.units === 'imperial';
+    const kg = Math.round(((parseFloat(measurements.weight) || 0) / (imperial ? 2.20462 : 1)) * 10) / 10;
+    const targetKg = Math.round(((parseFloat(measurements.target) || 0) / (imperial ? 2.20462 : 1)) * 10) / 10;
+    const cm = Math.round(((parseFloat(measurements.height) || 0) / (imperial ? 0.393701 : 1)) * 10) / 10;
+    const age = parseInt(measurements.age) || null;
+
+    // Cache onboarding measurements to localStorage for immediate resilience across page reloads
+    try {
+      const cached = {
+        gender: measurements.gender,
+        age,
+        height_cm: cm,
+        current_weight_kg: kg,
+        target_weight_kg: targetKg,
+        activity_level: activity,
+        daily_calorie_target: targets?.kcal || 1850,
+        target_protein_g: targets?.protein || 90,
+        target_carbs_g: targets?.carbs || 180,
+        target_fat_g: targets?.fat || 50,
+      };
+      localStorage.setItem('caloriesnap_onboarding_data', JSON.stringify(cached));
+    } catch {}
+
     if (isSupabaseConfigured) {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
-          const imperial = measurements.units === 'imperial';
-          const kg = (parseFloat(measurements.weight) || 0) / (imperial ? 2.20462 : 1);
-          const targetKg = (parseFloat(measurements.target) || 0) / (imperial ? 2.20462 : 1);
-          const cm = (parseFloat(measurements.height) || 0) / (imperial ? 0.393701 : 1);
-
           await supabase.from('profiles').upsert({
             id: user.id,
             email: user.email,
             full_name: user.user_metadata?.full_name,
             gender: measurements.gender,
-            age: parseInt(measurements.age) || null,
-            height_cm: Math.round(cm * 10) / 10,
-            current_weight_kg: Math.round(kg * 10) / 10,
-            target_weight_kg: Math.round(targetKg * 10) / 10,
+            age,
+            height_cm: cm,
+            current_weight_kg: kg,
+            target_weight_kg: targetKg,
             activity_level: activity,
+            daily_calorie_target: targets?.kcal || 1850,
+            target_protein_g: targets?.protein || 90,
+            target_carbs_g: targets?.carbs || 180,
+            target_fat_g: targets?.fat || 50,
             updated_at: new Date().toISOString(),
           });
         }

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native-web";
 import { authService, type ActivityLevel, type UserMeasurements } from "../services/authService";
+import { useApp } from "../context/AppContext";
 import {
   ActionButton,
   colors,
@@ -74,6 +75,7 @@ export default function ActivityPage({
   onComplete,
 }: ActivityPageProps) {
   const [isSaving, setIsSaving] = useState(false);
+  const { updateProfile, reloadUserData } = useApp();
   const target = estimateTarget(measurements, level);
 
   const macros = [
@@ -84,7 +86,22 @@ export default function ActivityPage({
 
   const handleFinish = async () => {
     setIsSaving(true);
-    await authService.saveOnboarding(measurements, level);
+    const imperial = measurements.units === "imperial";
+    const weightVal = parseFloat(measurements.weight) || 60;
+    const targetVal = parseFloat(measurements.target) || weightVal;
+    const kg = Math.round((weightVal / (imperial ? 2.20462 : 1)) * 10) / 10;
+    const targetKg = Math.round((targetVal / (imperial ? 2.20462 : 1)) * 10) / 10;
+
+    await authService.saveOnboarding(measurements, level, target);
+    await updateProfile({
+      currentWeight: kg,
+      targetWeight: targetKg,
+      calorieGoal: target.kcal,
+      proteinGoal: target.protein,
+      carbsGoal: target.carbs,
+      fatGoal: target.fat,
+    });
+    await reloadUserData();
     setIsSaving(false);
     onComplete();
   };

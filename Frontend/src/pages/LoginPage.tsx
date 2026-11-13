@@ -56,7 +56,15 @@ export default function LoginPage({
       await reloadUserData();
       onSignedIn(email.trim());
     } else {
-      setMessage({ type: "error", text: res.error || "Failed to sign in." });
+      const errText = res.error || "Failed to sign in.";
+      if (errText.toLowerCase().includes("email not confirmed")) {
+        setMessage({
+          type: "error",
+          text: "Email not confirmed. In Supabase Dashboard, go to Authentication > Providers > Email and turn OFF 'Confirm email', or run the confirmation SQL in Supabase.",
+        });
+      } else {
+        setMessage({ type: "error", text: errText });
+      }
     }
   };
 

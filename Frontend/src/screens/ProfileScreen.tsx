@@ -227,8 +227,8 @@ export default function ProfileScreen({ onNavigate, onLogOut }: ProfileScreenPro
 
         <Row style={{ justifyContent: 'space-around', paddingVertical: 6 }}>
           {[
-            [`${currentWeight}`, 'Current (kg)'],
-            [`${targetWeight}`, 'Target (kg)'],
+            [isMetric ? `${currentWeight}` : `${Math.round(currentWeight * 2.20462 * 10) / 10}`, isMetric ? 'Current (kg)' : 'Current (lbs)'],
+            [isMetric ? `${targetWeight}` : `${Math.round(targetWeight * 2.20462 * 10) / 10}`, isMetric ? 'Target (kg)' : 'Target (lbs)'],
             [`${bmi}`, 'BMI'],
           ].map(([n, l]) => (
             <View key={l} style={{ alignItems: 'center' }}>

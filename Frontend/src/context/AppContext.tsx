@@ -123,29 +123,70 @@ interface AppContextType {
   reloadUserData: () => Promise<void>;
 }
 
+function getInitialProfileCache(): Record<string, any> {
+  if (typeof window === 'undefined') return {};
+  try {
+    const onboarding = localStorage.getItem('caloriesnap_onboarding_data');
+    const profile = localStorage.getItem('caloriesnap_profile_cache');
+    const parsedOnboarding = onboarding ? JSON.parse(onboarding) : {};
+    const parsedProfile = profile ? JSON.parse(profile) : {};
+    return { ...parsedOnboarding, ...parsedProfile };
+  } catch {
+    return {};
+  }
+}
+
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export function AppProvider({ children }: { children: ReactNode }) {
+  const initialCache = getInitialProfileCache();
+
   // Auth state
   const [userId, setUserId] = useState<string | null>(null);
-  const [userEmail, setUserEmail] = useState<string>('');
+  const [userEmail, setUserEmail] = useState<string>(initialCache.email || '');
 
   // User Profile State (Dynamic, never hardcoded to one specific person!)
-  const [userName, setUserName] = useState<string>('CalorieSnap User');
-  const [userHandle, setUserHandle] = useState<string>('@user');
-  const [userBio, setUserBio] = useState<string>('Uni life, good food & little wins');
-  const [streakDays, setStreakDays] = useState(1);
-  const [snapPoints, setSnapPoints] = useState(100);
+  const [userName, setUserName] = useState<string>(
+    initialCache.name || initialCache.full_name || 'CalorieSnap User'
+  );
+  const [userHandle, setUserHandle] = useState<string>(
+    initialCache.username || '@user'
+  );
+  const [userBio, setUserBio] = useState<string>(
+    initialCache.bio || 'Uni life, good food & little wins'
+  );
+  const [streakDays, setStreakDays] = useState<number>(initialCache.streak_days ?? 1);
+  const [snapPoints, setSnapPoints] = useState<number>(initialCache.snap_points ?? 100);
   const [followersCount, setFollowersCount] = useState(0);
   const [followingCount, setFollowingCount] = useState(0);
   const [groupsCount, setGroupsCount] = useState(1);
-  const [currentWeight, setCurrentWeight] = useState(55.0);
-  const [targetWeight, setTargetWeight] = useState(52.0);
-  const [bmi, setBmi] = useState(21.2);
-  const [calorieGoal, setCalorieGoal] = useState(1850);
-  const [proteinGoal, setProteinGoal] = useState(90);
-  const [carbsGoal, setCarbsGoal] = useState(180);
-  const [fatGoal, setFatGoal] = useState(50);
+  const [userHeightCm, setUserHeightCm] = useState<number>(
+    Number(initialCache.height_cm) || 165
+  );
+  const [currentWeight, setCurrentWeight] = useState<number>(
+    Number(initialCache.currentWeight ?? initialCache.current_weight_kg) || 55.0
+  );
+  const [targetWeight, setTargetWeight] = useState<number>(
+    Number(initialCache.targetWeight ?? initialCache.target_weight_kg) || 52.0
+  );
+  const [bmi, setBmi] = useState<number>(() => {
+    const w = Number(initialCache.currentWeight ?? initialCache.current_weight_kg) || 55.0;
+    const h = (Number(initialCache.height_cm) || 165) / 100;
+    const calc = Math.round((w / (h * h)) * 10) / 10;
+    return calc > 10 && calc < 60 ? calc : 21.2;
+  });
+  const [calorieGoal, setCalorieGoal] = useState<number>(
+    Number(initialCache.calorieGoal ?? initialCache.daily_calorie_target) || 1850
+  );
+  const [proteinGoal, setProteinGoal] = useState<number>(
+    Number(initialCache.proteinGoal ?? initialCache.target_protein_g) || 90
+  );
+  const [carbsGoal, setCarbsGoal] = useState<number>(
+    Number(initialCache.carbsGoal ?? initialCache.target_carbs_g) || 180
+  );
+  const [fatGoal, setFatGoal] = useState<number>(
+    Number(initialCache.fatGoal ?? initialCache.target_fat_g) || 50
+  );
 
   // Daily Metrics
   const [burnedKcal, setBurnedKcal] = useState(200);
@@ -308,6 +349,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const clean = u.username.startsWith('@') ? u.username : `@${u.username}`;
       setUserHandle(clean);
     }
+    try {
+      const prev = JSON.parse(localStorage.getItem('caloriesnap_profile_cache') || '{}');
+      localStorage.setItem('caloriesnap_profile_cache', JSON.stringify({
+        ...prev,
+        email: u.email || prev.email,
+        name: u.name || prev.name,
+        username: u.username || prev.username,
+      }));
+    } catch {}
   };
 
   // Load live Supabase user & data
@@ -346,6 +396,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (profile.bio) setUserBio(profile.bio);
         if (profile.streak_days !== undefined && profile.streak_days !== null) setStreakDays(profile.streak_days);
         if (profile.snap_points !== undefined && profile.snap_points !== null) setSnapPoints(profile.snap_points);
+        if (profile.height_cm) setUserHeightCm(Number(profile.height_cm));
         if (profile.current_weight_kg) setCurrentWeight(Number(profile.current_weight_kg));
         if (profile.target_weight_kg) setTargetWeight(Number(profile.target_weight_kg));
         if (profile.daily_calorie_target) setCalorieGoal(profile.daily_calorie_target);
@@ -353,11 +404,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (profile.target_carbs_g) setCarbsGoal(Number(profile.target_carbs_g));
         if (profile.target_fat_g) setFatGoal(Number(profile.target_fat_g));
 
-        if (profile.height_cm && profile.current_weight_kg) {
-          const hM = Number(profile.height_cm) / 100;
-          const calculatedBmi = Math.round((Number(profile.current_weight_kg) / (hM * hM)) * 10) / 10;
+        const curW = Number(profile.current_weight_kg) || currentWeight;
+        const curH = Number(profile.height_cm) || userHeightCm;
+        if (curH && curW) {
+          const hM = curH / 100;
+          const calculatedBmi = Math.round((curW / (hM * hM)) * 10) / 10;
           if (calculatedBmi > 10 && calculatedBmi < 60) setBmi(calculatedBmi);
         }
+
+        try {
+          localStorage.setItem('caloriesnap_profile_cache', JSON.stringify({
+            name: profile.full_name,
+            username: profile.username,
+            bio: profile.bio,
+            height_cm: profile.height_cm,
+            currentWeight: profile.current_weight_kg,
+            targetWeight: profile.target_weight_kg,
+            calorieGoal: profile.daily_calorie_target,
+            proteinGoal: profile.target_protein_g,
+            carbsGoal: profile.target_carbs_g,
+            fatGoal: profile.target_fat_g,
+            streak_days: profile.streak_days,
+            snap_points: profile.snap_points,
+          }));
+        } catch {}
       } else {
         // Self-heal: ensure profiles row exists in database for this authenticated user
         await supabase.from('profiles').upsert({
@@ -666,11 +736,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (patch.username !== undefined) setUserHandle(patch.username);
     if (patch.bio !== undefined) setUserBio(patch.bio);
     if (patch.targetWeight !== undefined) setTargetWeight(patch.targetWeight);
-    if (patch.currentWeight !== undefined) setCurrentWeight(patch.currentWeight);
+    if (patch.currentWeight !== undefined) {
+      setCurrentWeight(patch.currentWeight);
+      const hM = (userHeightCm || 165) / 100;
+      const calculatedBmi = Math.round((patch.currentWeight / (hM * hM)) * 10) / 10;
+      if (calculatedBmi > 10 && calculatedBmi < 60) setBmi(calculatedBmi);
+    }
     if (patch.calorieGoal !== undefined) setCalorieGoal(patch.calorieGoal);
     if (patch.proteinGoal !== undefined) setProteinGoal(patch.proteinGoal);
     if (patch.carbsGoal !== undefined) setCarbsGoal(patch.carbsGoal);
     if (patch.fatGoal !== undefined) setFatGoal(patch.fatGoal);
+
+    try {
+      const prev = JSON.parse(localStorage.getItem('caloriesnap_profile_cache') || '{}');
+      localStorage.setItem('caloriesnap_profile_cache', JSON.stringify({
+        ...prev,
+        ...patch,
+      }));
+    } catch {}
 
     showToast('Profile & Goals updated!');
 
@@ -714,6 +797,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setUserBio('Uni life, good food & little wins');
     setTodayMeals([]);
     setWaterMl(0);
+    try {
+      localStorage.removeItem('caloriesnap_profile_cache');
+      localStorage.removeItem('caloriesnap_onboarding_data');
+    } catch {}
     showToast('Signed out successfully.');
   };
 
