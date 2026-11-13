@@ -1,7 +1,6 @@
 -- ============================================================================
 -- CalorieSnap - Row Level Security (RLS) Policies
 -- Group: A TTLS (UTM Group 1)
--- Authors: Aloysius Probo (Backend), Lee Hui Zhen (Frontend)
 -- Description: Strict security policies to ensure users only access their own private data.
 -- Run Order: Run this script AFTER database/schema.sql.
 -- ============================================================================

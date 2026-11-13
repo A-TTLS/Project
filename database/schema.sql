@@ -1,7 +1,6 @@
 -- ============================================================================
 -- CalorieSnap - Complete Supabase Relational Database Schema
 -- Group: A TTLS (UTM Group 1)
--- Authors: Aloysius Probo (Backend), Lee Hui Zhen (Frontend)
 -- Description: Core schema supporting Auth, Meals, Vision AI, Metrics, Social Circles, Gamification
 -- Note: Row Level Security (RLS) policies are defined in database/rls.sql
 -- Safe Clean-Install: Drops partial/outdated tables and rebuilds fresh
