@@ -49,7 +49,7 @@ CREATE POLICY "Users can update their own profile"
 DROP POLICY IF EXISTS "Users can view own or public meals" ON public.meals;
 CREATE POLICY "Users can view own or public meals"
   ON public.meals FOR SELECT
-  TO authenticated
+  TO authenticated, anon
   USING (auth.uid() = user_id OR is_public = true);
 
 DROP POLICY IF EXISTS "Users can insert own meals" ON public.meals;
@@ -97,7 +97,7 @@ CREATE POLICY "Users can update own daily metrics"
 DROP POLICY IF EXISTS "Public posts are viewable by all authenticated users" ON public.social_posts;
 CREATE POLICY "Public posts are viewable by all authenticated users"
   ON public.social_posts FOR SELECT
-  TO authenticated
+  TO authenticated, anon
   USING (visibility = 'public' OR auth.uid() = user_id);
 
 DROP POLICY IF EXISTS "Users can create their own posts" ON public.social_posts;

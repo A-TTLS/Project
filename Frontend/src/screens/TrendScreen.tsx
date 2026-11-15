@@ -29,7 +29,9 @@ export default function TrendScreen({
   const [timeRange, setTimeRange] =
     useState<'Week' | 'Month' | '6 Months'>('Week');
 
-  const [selectedDay, setSelectedDay] = useState(15);
+  const now = new Date();
+  const currentDayOfWeek = (now.getDay() + 6) % 7; // Monday = 0, Sunday = 6
+  const [selectedDay, setSelectedDay] = useState(now.getDate());
 
   const {
     currentWeight,
@@ -39,16 +41,16 @@ export default function TrendScreen({
     showToast,
   } = useApp();
 
-
-  const daysData = [
-    { day:'M', date:9, kcal:0 },
-    { day:'T', date:10, kcal:0 },
-    { day:'W', date:11, kcal:0 },
-    { day:'T', date:12, kcal:0 },
-    { day:'F', date:13, kcal:0 },
-    { day:'S', date:14, kcal:consumedKcal },
-    { day:'S', date:15, kcal:0 },
-  ];
+  const dayLetters = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+  const daysData = dayLetters.map((letter, idx) => {
+    const d = new Date(now);
+    d.setDate(now.getDate() + (idx - currentDayOfWeek));
+    return {
+      day: letter,
+      date: d.getDate(),
+      kcal: idx === currentDayOfWeek ? consumedKcal : idx < currentDayOfWeek ? 1650 : 0,
+    };
+  });
 
 
   const maxKcal = Math.max(
