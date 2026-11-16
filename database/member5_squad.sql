@@ -113,6 +113,24 @@ create trigger on_meal_change_sync_streak
   after insert or delete or update of logged_at on public.meals
   for each row execute function public.sync_meal_streak();
 
+-- New accounts start at 0 days: there are no meals yet.
+-- (handle_new_user in schema.sql sets 1; this corrects it on insert.)
+create or replace function public.start_streak_at_zero()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  new.streak_days := 0;
+  return new;
+end;
+$$;
+
+drop trigger if exists on_profile_start_streak on public.profiles;
+create trigger on_profile_start_streak
+  before insert on public.profiles
+  for each row execute function public.start_streak_at_zero();
+
 -- One-off: recalculate everyone's streak from their meals.
 update public.profiles p
 set streak_days = public.meal_streak(p.id);
@@ -373,6 +391,7 @@ $$;
 revoke all on function public.is_squad_member(uuid)               from public, anon;
 revoke all on function public.meal_streak(uuid)                   from public, anon, authenticated;
 revoke all on function public.sync_meal_streak()                  from public, anon, authenticated;
+revoke all on function public.start_streak_at_zero()              from public, anon, authenticated;
 revoke all on function public.create_squad(text, text)            from public, anon;
 revoke all on function public.join_squad(text)                    from public, anon;
 revoke all on function public.my_squads()                         from public, anon;
