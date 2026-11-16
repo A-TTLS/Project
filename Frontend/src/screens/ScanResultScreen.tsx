@@ -3,6 +3,7 @@ import { View, Switch, Pressable, Image, ActivityIndicator } from 'react-native-
 import { useApp } from '../context/AppContext';
 import { Screen, Row, Txt, Ph, Pill, IconBox, Card, Btn, SectionHead, c, assets } from '../ui';
 import { uploadMealImage } from '../services/mealImageUpload';
+import { matchFoodCatalogByDescription } from '../services/mealsService';
 
 interface ScanResultScreenProps {
   onNavigate: (screen: string) => void;
@@ -35,18 +36,42 @@ export default function ScanResultScreen({ onNavigate, capturedMeal }: ScanResul
   const [shareSocial, setShareSocial] = useState(true);
   const [isEditingName, setIsEditingName] = useState(false);
   const [mealName, setMealName] = useState(baseMeal.name);
+  const [resolvedMeal, setResolvedMeal] = useState(baseMeal);
 
   const multipliers = [0.5, 1.0, 1.5];
   const mult = multipliers[portionIndex];
 
-  const currentKcal = Math.round(baseMeal.kcal * mult);
-  const currentProtein = Math.round(baseMeal.protein * mult);
-  const currentCarbs = Math.round(baseMeal.carbs * mult);
-  const currentFat = Math.round(baseMeal.fat * mult);
+  React.useEffect(() => {
+    let ignore = false;
+
+    const resolveMealFromCatalog = async () => {
+      const matchedFood = await matchFoodCatalogByDescription(mealName || baseMeal.name, baseMeal.name);
+      if (!matchedFood || ignore) return;
+      setResolvedMeal({
+        ...baseMeal,
+        name: matchedFood.name,
+        kcal: matchedFood.calories,
+        protein: matchedFood.protein_g,
+        carbs: matchedFood.carbs_g,
+        fat: matchedFood.fat_g,
+      });
+      setMealName(matchedFood.name);
+    };
+
+    resolveMealFromCatalog();
+    return () => {
+      ignore = true;
+    };
+  }, [mealName, baseMeal]);
+
+  const currentKcal = Math.round(resolvedMeal.kcal * mult);
+  const currentProtein = Math.round(resolvedMeal.protein * mult);
+  const currentCarbs = Math.round(resolvedMeal.carbs * mult);
+  const currentFat = Math.round(resolvedMeal.fat * mult);
 
   const handleLog = async () => {
     setIsSubmitting(true);
-    let finalImageUrl = baseMeal.image;
+    let finalImageUrl = resolvedMeal.image;
 
     // If an image blob was captured from canvas or file and hasn't been uploaded yet
     if (baseMeal.imageFile && (!finalImageUrl || finalImageUrl.startsWith('data:') || finalImageUrl.startsWith('blob:'))) {
@@ -58,14 +83,26 @@ export default function ScanResultScreen({ onNavigate, capturedMeal }: ScanResul
       }
     }
 
+    const matchedFromDescription = await matchFoodCatalogByDescription(mealName || baseMeal.name, baseMeal.name);
+    const finalMeal = matchedFromDescription
+      ? {
+          ...resolvedMeal,
+          name: matchedFromDescription.name,
+          kcal: matchedFromDescription.calories,
+          protein: matchedFromDescription.protein_g,
+          carbs: matchedFromDescription.carbs_g,
+          fat: matchedFromDescription.fat_g,
+        }
+      : resolvedMeal;
+
     await logMeal({
-      name: mealName,
+      name: finalMeal.name,
       category,
       meta: `${category} · Logged`,
-      kcal: currentKcal,
-      protein: currentProtein,
-      carbs: currentCarbs,
-      fat: currentFat,
+      kcal: Math.round(finalMeal.kcal * mult),
+      protein: Math.round(finalMeal.protein * mult),
+      carbs: Math.round(finalMeal.carbs * mult),
+      fat: Math.round(finalMeal.fat * mult),
       image: finalImageUrl,
     });
 
@@ -118,11 +155,20 @@ export default function ScanResultScreen({ onNavigate, capturedMeal }: ScanResul
           label="✎"
           size={32}
           onPress={() => {
-            const input = prompt('Edit meal title:', mealName);
+            const input = prompt('Describe the food or meal:', mealName);
             if (input) setMealName(input);
           }}
         />
       </Row>
+
+      <View style={{ marginTop: 10, marginBottom: 4 }}>
+        <Txt s={11} w="700" color={c.dark} style={{ letterSpacing: 0.8 }}>FOOD DESCRIPTION / KEYWORDS</Txt>
+        <View style={{ marginTop: 8, borderWidth: 1, borderColor: c.line, borderRadius: 12, backgroundColor: '#f8fafc', paddingHorizontal: 12, paddingVertical: 10 }}>
+          <Txt s={12} color={c.mute}>
+            {mealName || 'No food description added yet. The AI will match keywords against the food database.'}
+          </Txt>
+        </View>
+      </View>
 
       {/* Dynamic Calories */}
       <Row style={{ alignItems: 'baseline', marginVertical: 4 }}>

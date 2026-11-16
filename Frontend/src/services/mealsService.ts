@@ -45,17 +45,213 @@ export interface FoodCatalogItem {
   tags: string[];
 }
 
+export interface DetectedFoodTag {
+  label: string;
+  calories: number;
+  confidence: number;
+}
+
+const fallbackFoodCatalog: FoodCatalogItem[] = [
+  {
+    id: 'f1',
+    name: 'Hainanese Steamed Chicken Rice',
+    category: 'Lunch',
+    calories: 560,
+    protein_g: 34,
+    carbs_g: 62,
+    fat_g: 16,
+    serving_size: '1 plate',
+    location_hint: 'rice chicken',
+    tags: ['rice', 'chicken', 'protein', 'steamed'],
+  },
+  {
+    id: 'f2',
+    name: 'Nasi Lemak Ayam Berempah',
+    category: 'Lunch',
+    calories: 650,
+    protein_g: 28,
+    carbs_g: 72,
+    fat_g: 26,
+    serving_size: '1 serving',
+    location_hint: 'malay rice set',
+    tags: ['rice', 'coconut', 'chicken', 'sambal'],
+  },
+  {
+    id: 'f3',
+    name: 'Roti Canai with Dhal & Sambal',
+    category: 'Breakfast',
+    calories: 380,
+    protein_g: 9,
+    carbs_g: 52,
+    fat_g: 15,
+    serving_size: '1 serving',
+    location_hint: 'breakfast',
+    tags: ['bread', 'dhal', 'sambal', 'flatbread'],
+  },
+  {
+    id: 'f4',
+    name: 'Subway 6-inch Roasted Chicken Breast',
+    category: 'Dinner',
+    calories: 320,
+    protein_g: 26,
+    carbs_g: 42,
+    fat_g: 5,
+    serving_size: '1 sandwich',
+    location_hint: 'subway chicken',
+    tags: ['chicken', 'bread', 'salad', 'protein'],
+  },
+  {
+    id: 'f5',
+    name: 'Greek Yogurt with Mixed Berries & Chia',
+    category: 'Breakfast',
+    calories: 220,
+    protein_g: 18,
+    carbs_g: 26,
+    fat_g: 4,
+    serving_size: '1 bowl',
+    location_hint: 'berries yogurt',
+    tags: ['yogurt', 'berries', 'chia', 'healthy'],
+  },
+  {
+    id: 'f6',
+    name: 'Chicken Salad Bowl',
+    category: 'Lunch',
+    calories: 430,
+    protein_g: 32,
+    carbs_g: 28,
+    fat_g: 18,
+    serving_size: '1 bowl',
+    location_hint: 'salad greens',
+    tags: ['chicken', 'salad', 'greens', 'veggie'],
+  },
+];
+
+function normalizeFoodText(value: string): string {
+  return (value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function scoreCatalogMatch(query: string, item: FoodCatalogItem): number {
+  const normalizedQuery = normalizeFoodText(query);
+  if (!normalizedQuery) return 0;
+
+  const candidateText = normalizeFoodText(`${item.name} ${item.category} ${item.location_hint} ${item.tags.join(' ')}`);
+  const queryTerms = normalizedQuery.split(' ').filter(Boolean);
+  let score = 0;
+
+  for (const term of queryTerms) {
+    if (!term) continue;
+    if (candidateText.includes(term)) {
+      score += 3;
+    }
+    if (item.name.toLowerCase().includes(term)) {
+      score += 2;
+    }
+    if (item.tags.some((tag) => normalizeFoodText(tag).includes(term))) {
+      score += 2;
+    }
+  }
+
+  if (candidateText.includes(normalizedQuery)) {
+    score += 4;
+  }
+
+  return score;
+}
+
+async function getFoodCatalogCandidates(query = ''): Promise<FoodCatalogItem[]> {
+  const normalizedQuery = normalizeFoodText(query);
+
+  if (isSupabaseConfigured) {
+    try {
+      let results: any[] = [];
+      if (normalizedQuery) {
+        const { data, error } = await supabase
+          .from('food_catalog')
+          .select('*')
+          .ilike('name', `%${normalizedQuery}%`)
+          .limit(10);
+
+        if (!error && data?.length) results = data;
+      }
+
+      if (!results.length) {
+        const { data, error } = await supabase.from('food_catalog').select('*').limit(20);
+        if (!error && data?.length) results = data;
+      }
+
+      if (results.length) return results as FoodCatalogItem[];
+    } catch (err) {
+      console.warn('Food catalog lookup failed, falling back to local catalog:', err);
+    }
+  }
+
+  const candidates = normalizedQuery
+    ? fallbackFoodCatalog.filter((item) => scoreCatalogMatch(normalizedQuery, item) > 0)
+    : fallbackFoodCatalog;
+
+  return candidates.length ? candidates : fallbackFoodCatalog;
+}
+
+export async function matchFoodCatalogByDescription(
+  description?: string,
+  fallbackName?: string
+): Promise<FoodCatalogItem | null> {
+  const combinedQuery = [description, fallbackName].filter(Boolean).join(' ');
+  const candidates = await getFoodCatalogCandidates(combinedQuery);
+
+  if (!combinedQuery.trim()) return candidates[0] ?? null;
+
+  const ranked = [...candidates].sort(
+    (a, b) => scoreCatalogMatch(combinedQuery, b) - scoreCatalogMatch(combinedQuery, a)
+  );
+
+  return ranked[0] ?? candidates[0] ?? null;
+}
+
 /**
  * 1. Mock AI Analysis Helper
  * Simulates a realistic nutritional breakdown with network latency.
- * 
- * // TODO: Replace with teammate's real AI scan API when ready!
+ *
+ * The demo app uses a food catalog and keyword matching so the scanned result
+ * resolves to a real database item even before a user enters a manual description.
  */
 export async function mockAnalyzeFoodPhoto(
-  _fileOrUrl?: File | Blob | string
-): Promise<MockAIAnalysisResult> {
+  fileOrUrl?: File | Blob | string,
+  description?: string
+): Promise<MockAIAnalysisResult & { tags: DetectedFoodTag[] }> {
   // Simulate 1-second network latency
   await new Promise((resolve) => setTimeout(resolve, 1000));
+
+  const fileName = typeof fileOrUrl === 'string' ? fileOrUrl : fileOrUrl instanceof File ? fileOrUrl.name : '';
+  const searchText = [description, fileName].filter(Boolean).join(' ');
+  const matchedFood = await matchFoodCatalogByDescription(searchText, 'meal');
+
+  if (matchedFood) {
+    const mealName = matchedFood.name;
+    const calories = matchedFood.calories;
+    const protein = matchedFood.protein_g;
+    const carbs = matchedFood.carbs_g;
+    const fat = matchedFood.fat_g;
+
+    return {
+      meal_name: mealName,
+      calories,
+      protein,
+      carbs,
+      fat,
+      meal_type: matchedFood.category as 'Breakfast' | 'Lunch' | 'Dinner' | 'Snacks',
+      confidence: 0.94,
+      tags: [
+        { label: mealName, calories, confidence: 0.94 },
+        { label: `Protein • ${protein}g`, calories: protein * 4, confidence: 0.9 },
+        { label: `Carbs • ${carbs}g`, calories: carbs * 4, confidence: 0.88 },
+      ],
+    };
+  }
 
   const mockDatabase: MockAIAnalysisResult[] = [
     {
@@ -105,9 +301,16 @@ export async function mockAnalyzeFoodPhoto(
     },
   ];
 
-  // Pick a realistic campus dish
   const randomIndex = Math.floor(Math.random() * mockDatabase.length);
-  return mockDatabase[randomIndex];
+  const fallbackMeal = mockDatabase[randomIndex];
+  return {
+    ...fallbackMeal,
+    tags: [
+      { label: fallbackMeal.meal_name, calories: fallbackMeal.calories, confidence: fallbackMeal.confidence },
+      { label: `Protein • ${fallbackMeal.protein}g`, calories: fallbackMeal.protein * 4, confidence: fallbackMeal.confidence },
+      { label: `Carbs • ${fallbackMeal.carbs}g`, calories: fallbackMeal.carbs * 4, confidence: fallbackMeal.confidence },
+    ],
+  };
 }
 
 export const mealsService = {

@@ -28,6 +28,7 @@ export default function ScanScreen({ onNavigate, onPhotoCaptured }: ScanScreenPr
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [capturedPreview, setCapturedPreview] = useState<string | null>(null);
+  const [detectedTags, setDetectedTags] = useState<Array<{ label: string; calories: number; confidence: number }>>([]);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -52,6 +53,7 @@ export default function ScanScreen({ onNavigate, onPhotoCaptured }: ScanScreenPr
   // Start camera using navigator.mediaDevices.getUserMedia
   const startCamera = async (facing: 'environment' | 'user') => {
     stopCamera();
+    setDetectedTags([]);
     setCameraError(null);
 
     if (!navigator?.mediaDevices?.getUserMedia) {
@@ -97,6 +99,7 @@ export default function ScanScreen({ onNavigate, onPhotoCaptured }: ScanScreenPr
 
   // Handle capture: snap from live video canvas or fallback
   const handleSnap = async () => {
+    setDetectedTags([]);
     setIsProcessing(true);
     showToast('📸 Snapping & analyzing food with AI...');
 
@@ -125,6 +128,7 @@ export default function ScanScreen({ onNavigate, onPhotoCaptured }: ScanScreenPr
     // Call Mock AI photo analysis helper
     // TODO: Replace with teammate's real AI scan API when ready!
     const aiAnalysis = await mockAnalyzeFoodPhoto(photoBlob || undefined);
+    setDetectedTags(aiAnalysis.tags || []);
 
     const chosenImage = previewDataUrl || capturedPreview || assets.hero;
 
@@ -162,6 +166,7 @@ export default function ScanScreen({ onNavigate, onPhotoCaptured }: ScanScreenPr
     const file = e.target.files?.[0];
     if (!file) return;
 
+    setDetectedTags([]);
     setIsProcessing(true);
     showToast('Analyzing selected photo with AI...');
 
@@ -172,6 +177,7 @@ export default function ScanScreen({ onNavigate, onPhotoCaptured }: ScanScreenPr
       // 1. Analyze with Mock AI
       // TODO: Replace with teammate's real AI scan API when ready!
       const aiAnalysis = await mockAnalyzeFoodPhoto(file);
+      setDetectedTags(aiAnalysis.tags || []);
 
       // 2. Upload photo
       const res = await uploadMealImage(file, userId || undefined);
@@ -256,22 +262,26 @@ export default function ScanScreen({ onNavigate, onPhotoCaptured }: ScanScreenPr
         <Corner style={{ bottom: 16, left: 16, borderRightWidth: 0, borderTopWidth: 0 }} />
         <Corner style={{ bottom: 16, right: 16, borderLeftWidth: 0, borderTopWidth: 0 }} />
 
-        {/* AI Detected Ingredient Tags */}
-        <Tag
-          t="Rice · 210 kcal"
-          style={{ top: 40, left: 24 }}
-          onPress={() => showToast('AI Confidence: 96% · White Jasmine Rice')}
-        />
-        <Tag
-          t="Poached Chicken · 280 kcal"
-          style={{ top: '48%', right: 24 }}
-          onPress={() => showToast('AI Confidence: 94% · Lean Chicken Breast')}
-        />
-        <Tag
-          t="Cucumber & Chili · 40 kcal"
-          style={{ bottom: 40, left: 32 }}
-          onPress={() => showToast('AI Confidence: 91% · Fresh Veggie Garnish')}
-        />
+        {/* AI Detected Ingredient Tags: only appear after the photo is captured/analyzed */}
+        {detectedTags.length > 0 &&
+          detectedTags.map((tag, index) => {
+            const positions = [
+              { top: 40, left: 24 },
+              { top: '48%', right: 24 },
+              { bottom: 40, left: 32 },
+            ];
+            const position = positions[index % positions.length];
+
+            return (
+              <Tag
+                key={`${tag.label}-${index}`}
+                t={`${tag.label} · ${Math.round(tag.calories)} kcal`}
+                style={position}
+                onPress={() => showToast(`AI Confidence: ${Math.round(tag.confidence * 100)}% · ${tag.label}`)}
+              />
+            );
+          })
+        }
       </View>
 
       {/* Guide Caption & Error Notice */}
