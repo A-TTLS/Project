@@ -175,8 +175,8 @@ function BoardRow({ member, onNudge }: { member: BoardMember; onNudge: (slot: Me
     <Card style={{ flexDirection: 'row', marginBottom: 12, padding: 12 }}>
       <View style={{ alignItems: 'center', width: 75, borderRightWidth: 1, borderColor: c.line, paddingRight: 8 }}>
         <Avatar size={40} label={displayName(member).charAt(0)} />
-        <Txt w="800" style={{ marginTop: 4, textAlign: 'center' }} numberOfLines={1}>{displayName(member)}</Txt>
-        <Txt s={10} color={c.mute}>🔥 {member.streak_days}-day streak</Txt>
+        <Txt w="800" style={{ marginTop: 4, textAlign: 'center' }} numberOfLines={1}>{displayName(member).split(' ')[0]}</Txt>
+        <Txt s={10} color={c.mute} style={{ textAlign: 'center', marginBottom: 4 }}>🔥 {member.streak_days} {member.streak_days === 1 ? 'day' : 'days'}</Txt>
         <Ring size={40} label={`${pct}%`} />
       </View>
 

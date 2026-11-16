@@ -391,9 +391,9 @@ export default function RewardsScreen({ onNavigate }: RewardsScreenProps) {
         return (
           <Card key={v.id} style={{ marginBottom: 12 }}>
             <Row style={{ justifyContent: 'space-between', alignItems: 'center' }}>
-              <Row style={{ alignItems: 'center' }}>
+              <Row style={{ alignItems: 'center', flex: 1, marginRight: 8 }}>
                 <BrandSketchIcon brand={v.brand} title={v.title} />
-                <View style={{ marginLeft: 12 }}>
+                <View style={{ marginLeft: 12, flex: 1 }}>
                   <Txt s={11} color={c.mute}>{v.brand}</Txt>
                   <Txt w="800" s={15}>{v.title}</Txt>
                 </View>
