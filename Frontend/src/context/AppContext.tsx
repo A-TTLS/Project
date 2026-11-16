@@ -1,6 +1,18 @@
 import React, { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 import { supabase, isSupabaseConfigured } from '../services/supabaseClient';
 import { authService } from '../services/authService';
+import type { VisionRecognitionResult } from '../services/visionService';
+
+export interface CapturedMeal {
+  name: string;
+  kcal: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  image?: string;
+  imageFile?: Blob | File;
+  visionResult: VisionRecognitionResult;
+}
 
 export interface MealItem {
   id: string;
@@ -14,6 +26,8 @@ export interface MealItem {
   logged: boolean;
   time?: string;
   image?: string;
+  imageUrl?: string;
+  portionMultiplier?: number;
 }
 
 export interface VoucherItem {
@@ -100,8 +114,13 @@ interface AppContextType {
   stepsCount: number;
   workoutMins: number;
   todayMeals: MealItem[];
+  capturedMeal: CapturedMeal | null;
+  setCapturedMeal: (meal: CapturedMeal | null) => void;
+  editingMeal: MealItem | null;
+  setEditingMeal: (meal: MealItem | null) => void;
   addWater: (amount?: number) => void;
   logMeal: (meal: Omit<MealItem, 'id' | 'logged'>) => Promise<void>;
+  updateMeal: (id: string, updatedFields: Partial<Omit<MealItem, 'id' | 'logged'>>) => Promise<void>;
   deleteMeal: (id: string) => Promise<void>;
 
   // Rewards & Missions
@@ -256,6 +275,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // Meals List (Dynamic per day, clean start for each new calendar day)
   const [todayMeals, setTodayMeals] = useState<MealItem[]>(initialDay.meals);
+  const [capturedMeal, setCapturedMeal] = useState<CapturedMeal | null>(null);
+  const [editingMeal, setEditingMeal] = useState<MealItem | null>(null);
 
   // Derived Macronutrient and Calorie Totals
   const consumedKcal = todayMeals.filter(m => m.logged).reduce((sum, m) => sum + m.kcal, 0);
@@ -531,6 +552,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           logged: true,
           time: new Date(m.logged_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           image: m.image_url,
+          imageUrl: m.image_url,
         }));
         setTodayMeals(mapped);
         try {
@@ -741,6 +763,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const tempId = `m_${Date.now()}`;
     const mealItem: MealItem = {
       ...newMeal,
+      imageUrl: newMeal.imageUrl || newMeal.image,
       id: tempId,
       logged: true,
       time: newMeal.time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
@@ -768,7 +791,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           protein_g: Number(newMeal.protein) || 0,
           carbs_g: Number(newMeal.carbs) || 0,
           fat_g: Number(newMeal.fat) || 0,
-          image_url: newMeal.image || null,
+          image_url: newMeal.imageUrl || newMeal.image || null,
           is_public: true, // Shared meals are viewable by all users under RLS
           logged_at: new Date().toISOString(),
         }).select().single();
@@ -791,9 +814,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const pct = Math.round((newMeal.kcal / dailyGoal) * 100);
         // Use the meal's image if available, otherwise a food placeholder
         const postImage =
-          newMeal.image && newMeal.image.startsWith('http')
-            ? newMeal.image
-            : `https://source.unsplash.com/400x300/?${encodeURIComponent(newMeal.name + ' food')}`;
+          newMeal.image && /^https?:\/\//.test(newMeal.image) ? newMeal.image : null;
 
         const caption = `Just logged ${newMeal.name} for ${newMeal.category.toLowerCase()} 🍽️ ${newMeal.kcal} kcal · ${newMeal.protein}g protein`;
 
@@ -835,6 +856,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
         console.warn('Failed to delete meal in Supabase:', err);
       }
     }
+  };
+
+  const updateMeal = async (id: string, updatedFields: Partial<Omit<MealItem, 'id' | 'logged'>>) => {
+    const existing = todayMeals.find((meal) => meal.id === id);
+    if (!existing) return;
+    const updatedMeal = { ...existing, ...updatedFields, id: existing.id, logged: existing.logged };
+    setTodayMeals((prev) => {
+      const updated = prev.map((meal) => meal.id === id ? updatedMeal : meal);
+      try { localStorage.setItem('caloriesnap_today_meals', JSON.stringify(updated)); } catch {}
+      return updated;
+    });
+    if (isSupabaseConfigured && userId && !id.startsWith('m_')) {
+      try {
+        const { error } = await supabase.from('meals').update({
+          name: updatedMeal.name, category: updatedMeal.category, calories: Math.round(updatedMeal.kcal),
+          protein_g: Number(updatedMeal.protein) || 0, carbs_g: Number(updatedMeal.carbs) || 0,
+          fat_g: Number(updatedMeal.fat) || 0, image_url: updatedMeal.imageUrl || updatedMeal.image || null,
+        }).eq('id', id).eq('user_id', userId);
+        if (error) console.warn('Supabase meal update error:', error.message);
+      } catch (error) { console.warn('Failed to update meal in Supabase:', error); }
+    }
+    showToast(`Updated "${updatedMeal.name}".`);
   };
 
   // Profile Update Action
@@ -913,6 +956,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setUserHandle('@user');
     setUserBio('Uni life, good food & little wins');
     setTodayMeals([]);
+    setCapturedMeal(null);
+    setEditingMeal(null);
     setWaterMl(0);
     setStepsCount(0);
     setWorkoutMins(0);
@@ -1049,8 +1094,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         stepsCount,
         workoutMins,
         todayMeals,
+        capturedMeal,
+        setCapturedMeal,
+        editingMeal,
+        setEditingMeal,
         addWater,
         logMeal,
+        updateMeal,
         deleteMeal,
 
         claimedVouchers,

@@ -20,15 +20,6 @@ import { checkSupabaseHealth } from './services/supabaseClient';
 function AppContent() {
   const [currentScreen, setCurrentScreen] = useState('Home');
   const [dbStatus, setDbStatus] = useState<'checking' | 'connected' | 'offline'>('checking');
-  const [capturedMeal, setCapturedMeal] = useState<{
-    name: string;
-    kcal: number;
-    protein: number;
-    carbs: number;
-    fat: number;
-    image?: string;
-  } | undefined>();
-
   const [showNavSwitcher, setShowNavSwitcher] = useState(true);
 
   // Check Supabase Backend Health on load
@@ -81,19 +72,9 @@ function AppContent() {
       case 'Social · Groups':
         return <SocialScreen onNavigate={setCurrentScreen} initialTab={2} />;
       case 'Scan':
-        return (
-          <ScanScreen
-            onNavigate={setCurrentScreen}
-            onPhotoCaptured={(meal) => setCapturedMeal(meal)}
-          />
-        );
+        return <ScanScreen onNavigate={setCurrentScreen} />;
       case 'Scan Result':
-        return (
-          <ScanResultScreen
-            onNavigate={setCurrentScreen}
-            capturedMeal={capturedMeal}
-          />
-        );
+        return <ScanResultScreen onNavigate={setCurrentScreen} />;
       case 'Trend':
       case 'Trend · Analytics':
         return <TrendScreen onNavigate={setCurrentScreen} initialTab={0} />;

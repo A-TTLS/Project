@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Pressable, TextInput, ScrollView } from 'react-native-web';
+import { View, Pressable, TextInput, ScrollView, Image } from 'react-native-web';
 import { useApp } from '../context/AppContext';
 import {
   Screen,
@@ -81,6 +81,8 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
     addWater,
     logMeal,
     deleteMeal,
+    setEditingMeal,
+    setCapturedMeal,
     showToast,
   } = useApp();
 
@@ -405,9 +407,7 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
                     flexShrink: 0,
                   }}
                 >
-                  <Txt s={22} style={{ textAlign: 'center', lineHeight: 26 }}>
-                    {getMealEmoji(meal.name, meal.category)}
-                  </Txt>
+                  {meal.imageUrl || meal.image ? <Image source={{ uri: meal.imageUrl || meal.image }} style={{ width: 44, height: 44, borderRadius: 14, objectFit: 'cover' as const }} /> : <Txt s={22} style={{ textAlign: 'center', lineHeight: 26 }}>{getMealEmoji(meal.name, meal.category)}</Txt>}
                 </View>
 
                 <View style={{ flex: 1 }}>
@@ -422,6 +422,13 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
 
               <Row style={{ alignItems: 'center', gap: 8 }}>
                 <Txt s={15} w="800">{meal.kcal} <Txt s={11} color={c.mute}>kcal</Txt></Txt>
+                <Pressable
+                  accessibilityLabel={`Edit ${meal.name}`}
+                  onPress={() => { setEditingMeal(meal); setCapturedMeal(null); onNavigate('Scan Result'); }}
+                  style={{ padding: 4 }}
+                >
+                  <Icon name="edit" size={16} color={c.ink} />
+                </Pressable>
                 <Pressable
                   onPress={() => deleteMeal(meal.id)}
                   style={{ padding: 4 }}

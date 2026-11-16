@@ -86,8 +86,12 @@ export const Pill = ({ children, active, bg, onPress }: { children: ReactNode; a
   </Pressable>
 );
 
-export const Btn = ({ children, bg = c.yellow, onPress, style }: { children: ReactNode; bg?: string; onPress?: () => void; style?: ViewStyle }) => (
-  <Pressable onPress={onPress} style={({ pressed }) => [st.btn, { backgroundColor: bg }, pressed && { opacity: 0.8 }, style]}>
+export const Btn = ({ children, bg = c.yellow, onPress, style, disabled = false }: { children: ReactNode; bg?: string; onPress?: () => void; style?: ViewStyle; disabled?: boolean }) => (
+  <Pressable
+    disabled={disabled}
+    onPress={disabled ? undefined : onPress}
+    style={({ pressed }) => [st.btn, { backgroundColor: bg, opacity: disabled ? 0.55 : 1 }, pressed && !disabled && { opacity: 0.8 }, style]}
+  >
     <Txt w="700">{children}</Txt>
   </Pressable>
 );
