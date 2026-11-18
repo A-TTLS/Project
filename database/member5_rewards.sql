@@ -1,6 +1,6 @@
 -- ============================================================================
 -- CalorieSnap · Member 5 (Aloysius) · Rewards: SnapPoints, daily missions, vouchers
--- Run AFTER database/schema.sql. Safe to run more than once.
+-- Run AFTER database/schema.sql and database/rls.sql. Safe to run more than once.
 --
 -- The rule behind this file: the app may READ points, missions and vouchers,
 -- but it can never WRITE them directly. Every change to points goes through
@@ -25,6 +25,7 @@ grant update (
 -- Remove the policies that let the app claim vouchers or complete missions itself.
 drop policy if exists "Users can claim vouchers" on public.claimed_vouchers;
 drop policy if exists "Users can update own daily missions" on public.daily_missions;
+drop policy if exists "Users can insert own daily missions" on public.daily_missions;
 
 
 -- ----------------------------------------------------------------------------
@@ -167,6 +168,7 @@ as $$
 declare
   v_user    uuid := auth.uid();
   v_mission public.daily_missions%rowtype;
+  v_reward  integer;
   v_balance integer;
 begin
   if v_user is null then
@@ -189,13 +191,24 @@ begin
     raise exception 'Mission reward already claimed';
   end if;
 
+  -- The reward comes from the mission type, never from the stored row,
+  -- so a tampered row cannot pay out more.
+  v_reward := case v_mission.mission_type
+                when 'snap_3_meals' then 50
+                when 'steps_8000'   then 30
+                when 'water_2000'   then 20
+              end;
+  if v_reward is null then
+    raise exception 'Unknown mission type';
+  end if;
+
   update public.daily_missions set is_claimed = true where id = v_mission.id;
 
   insert into public.points_ledger (user_id, delta, reason, ref_id)
-  values (v_user, v_mission.points_reward, 'mission', v_mission.id);
+  values (v_user, v_reward, 'mission', v_mission.id);
 
   update public.profiles
-  set snap_points = snap_points + v_mission.points_reward
+  set snap_points = snap_points + v_reward
   where id = v_user
   returning snap_points into v_balance;
 
