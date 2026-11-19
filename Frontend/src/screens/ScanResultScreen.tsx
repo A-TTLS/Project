@@ -113,7 +113,7 @@ export default function ScanResultScreen({ onNavigate }: ScanResultScreenProps) 
 
   if (!editingMeal && !capturedMeal?.visionResult) {
     return (
-      <Screen tab="Scan" onSelectTab={onNavigate}>
+      <Screen hideTabBar onSelectTab={onNavigate}>
         <View style={{ marginTop: 32, padding: 18, borderRadius: 16, backgroundColor: c.card, borderWidth: 1, borderColor: c.line }}>
           <Txt s={20} w="800">No scan yet</Txt>
           <Txt s={13} color={c.mute} style={{ marginTop: 8 }}>
@@ -129,7 +129,7 @@ export default function ScanResultScreen({ onNavigate }: ScanResultScreenProps) 
 
   if (!editingMeal && visionResult?.is_food === false) {
     return (
-      <Screen tab="Scan" onSelectTab={onNavigate}>
+      <Screen hideTabBar onSelectTab={onNavigate}>
         {capturedMeal?.image ? (
           <View style={{ marginHorizontal: -20, marginTop: -24, height: 220, overflow: 'hidden' }}>
             <Image
@@ -153,7 +153,7 @@ export default function ScanResultScreen({ onNavigate }: ScanResultScreenProps) 
   }
 
   return (
-    <Screen tab="Scan" onSelectTab={onNavigate}>
+    <Screen hideTabBar onSelectTab={onNavigate}>
       <View style={{ marginHorizontal: -20, marginTop: -36, position: 'relative', height: 260, overflow: 'hidden', backgroundColor: '#1a202c' }}>
         {(capturedMeal?.image || editingMeal?.imageUrl || editingMeal?.image) ? (
           <Image

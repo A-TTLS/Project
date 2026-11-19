@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Pressable, ActivityIndicator } from 'react-native-web';
 import { useApp, type CapturedMeal } from '../context/AppContext';
-import { Row, Txt, IconBox, Pill, TabBar, c } from '../ui';
+import { Row, Txt, IconBox, Pill, c } from '../ui';
 import { analyzeFoodImage, type VisionRecognitionResult } from '../services/visionService';
 
 interface ScanScreenProps { onNavigate: (screen: string) => void }
@@ -203,11 +203,10 @@ export default function ScanScreen({ onNavigate }: ScanScreenProps) {
     <View style={{ alignItems: 'center', paddingHorizontal: 20 }}><Txt s={20} w="800" color="#fff">Good food. Great focus.</Txt><Txt s={12} color="#cbd5e1" style={{ marginTop: 4, textAlign: 'center' }}>{capturedUrl ? 'Snapshot frozen. Add optional details, then analyze your meal.' : cameraActive ? 'Camera active. Frame your plate and tap the shutter.' : cameraError || 'Align your plate within the frame, or upload a photo from Gallery.'}</Txt>
       {scanError ? <View style={{ marginTop: 14, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, backgroundColor: '#FDE8E8', maxWidth: 460 }}><Txt s={13} color="#7f1d1d" style={{ textAlign: 'center' }}>{scanError}</Txt></View> : null}</View>
 
-    {!capturedUrl && <Row style={{ justifyContent: 'space-around', alignItems: 'center', paddingHorizontal: 36, marginTop: 24, marginBottom: 120 }}>
+    {!capturedUrl && <Row style={{ justifyContent: 'space-around', alignItems: 'center', paddingHorizontal: 36, marginTop: 24, marginBottom: 36 }}>
       <Pressable onPress={() => fileInputRef.current?.click()} disabled={isProcessing} style={{ alignItems: 'center', cursor: 'pointer' as const }}><IconBox size={50} label="img" /><Txt s={11} color="#fff" style={{ marginTop: 4 }}>Gallery</Txt></Pressable>
       <Pressable onPress={handleSnap} disabled={isProcessing} style={({ pressed }: { pressed: boolean }) => [{ width: 80, height: 80, borderRadius: 40, borderWidth: 4, borderColor: '#fff', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' as const, transform: [{ scale: pressed ? 0.95 : 1 }] }]}><View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: c.yellow }} /></Pressable>
       <Pressable onPress={() => { if (!isProcessing) { setCameraFacing((facing) => facing === 'environment' ? 'user' : 'environment'); showToast('Switched camera'); } }} style={{ alignItems: 'center', cursor: 'pointer' as const }}><IconBox size={50} label="flip" /><Txt s={11} color="#fff" style={{ marginTop: 4 }}>Flip</Txt></Pressable>
     </Row>}
-    <TabBar active="Scan" onSelectTab={(tab) => { stopStream(); onNavigate(tab); }} />
   </View>;
 }

@@ -54,23 +54,23 @@ export default function ProfileScreen({ onNavigate, onLogOut }: ProfileScreenPro
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
 
-  // Edit Profile Form State
-  const [editName, setEditName] = useState(userName);
-  const [editHandle, setEditHandle] = useState(userHandle);
-  const [editBio, setEditBio] = useState(userBio);
-  const [editCurrentWeight, setEditCurrentWeight] = useState(String(currentWeight));
-  const [editTarget, setEditTarget] = useState(String(targetWeight));
-  const [editGoal, setEditGoal] = useState(String(calorieGoal));
-  const [editProtein, setEditProtein] = useState(String(proteinGoal));
-  const [editCarbs, setEditCarbs] = useState(String(carbsGoal));
-  const [editFat, setEditFat] = useState(String(fatGoal));
+  // Edit Profile Form State - starts empty for clean user inputs
+  const [editName, setEditName] = useState('');
+  const [editHandle, setEditHandle] = useState('');
+  const [editBio, setEditBio] = useState('');
+  const [editCurrentWeight, setEditCurrentWeight] = useState('');
+  const [editTarget, setEditTarget] = useState('');
+  const [editGoal, setEditGoal] = useState('');
+  const [editProtein, setEditProtein] = useState('');
+  const [editCarbs, setEditCarbs] = useState('');
+  const [editFat, setEditFat] = useState('');
 
   // Settings Toggles
   const [isPrivateProfile, setIsPrivateProfile] = useState(false);
   const [autoShareMeals, setAutoShareMeals] = useState(true);
   const [isMetric, setIsMetric] = useState(true);
-  const [waterTarget, setWaterTarget] = useState('2000');
-  const [stepTarget, setStepTarget] = useState('8000');
+  const [waterTarget, setWaterTarget] = useState('');
+  const [stepTarget, setStepTarget] = useState('');
 
   // Change Password Form
   const [oldPassword, setOldPassword] = useState('');
@@ -78,23 +78,23 @@ export default function ProfileScreen({ onNavigate, onLogOut }: ProfileScreenPro
   const [confirmPassword, setConfirmPassword] = useState('');
 
   const openEditModal = () => {
-    setEditName(userName);
-    setEditHandle(userHandle);
-    setEditBio(userBio);
-    setEditCurrentWeight(String(currentWeight));
-    setEditTarget(String(targetWeight));
-    setEditGoal(String(calorieGoal));
-    setEditProtein(String(proteinGoal));
-    setEditCarbs(String(carbsGoal));
-    setEditFat(String(fatGoal));
+    setEditName('');
+    setEditHandle('');
+    setEditBio('');
+    setEditCurrentWeight('');
+    setEditTarget('');
+    setEditGoal('');
+    setEditProtein('');
+    setEditCarbs('');
+    setEditFat('');
     setIsEditing(true);
   };
 
   const handleSaveProfile = async () => {
     await updateProfile({
-      name: editName.trim() || userName,
-      username: editHandle.trim().startsWith('@') ? editHandle.trim() : `@${editHandle.trim()}`,
-      bio: editBio.trim() || userBio,
+      name: editName.trim() ? editName.trim() : userName,
+      username: editHandle.trim() ? (editHandle.trim().startsWith('@') ? editHandle.trim() : `@${editHandle.trim()}`) : userHandle,
+      bio: editBio.trim() ? editBio.trim() : userBio,
       currentWeight: parseFloat(editCurrentWeight) || currentWeight,
       targetWeight: parseFloat(editTarget) || targetWeight,
       calorieGoal: parseInt(editGoal) || calorieGoal,
@@ -137,7 +137,11 @@ export default function ProfileScreen({ onNavigate, onLogOut }: ProfileScreenPro
   };
 
   return (
-    <Screen tab="Profile" onSelectTab={onNavigate}>
+    <Screen
+      tab="Profile"
+      onSelectTab={onNavigate}
+      hideTabBar={isEditing || showSettingsModal || showPasswordModal || showDeleteModal}
+    >
       {/* Top Header */}
       <Row style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
         <View>
@@ -357,8 +361,9 @@ export default function ProfileScreen({ onNavigate, onLogOut }: ProfileScreenPro
                 <TextInput
                   value={editName}
                   onChangeText={setEditName}
-                  placeholder="Your full name"
-                  style={{ borderWidth: 1, borderColor: c.line, borderRadius: 12, padding: 10, fontSize: 14 }}
+                  placeholder={userName || "Your full name"}
+                  placeholderTextColor="#94A3B8"
+                  style={{ borderWidth: 1, borderColor: c.line, borderRadius: 12, padding: 10, fontSize: 14, color: '#1E293B' }}
                 />
               </View>
 
@@ -367,8 +372,9 @@ export default function ProfileScreen({ onNavigate, onLogOut }: ProfileScreenPro
                 <TextInput
                   value={editHandle}
                   onChangeText={setEditHandle}
-                  placeholder="@username"
-                  style={{ borderWidth: 1, borderColor: c.line, borderRadius: 12, padding: 10, fontSize: 14 }}
+                  placeholder={userHandle || "@username"}
+                  placeholderTextColor="#94A3B8"
+                  style={{ borderWidth: 1, borderColor: c.line, borderRadius: 12, padding: 10, fontSize: 14, color: '#1E293B' }}
                 />
               </View>
 
@@ -383,8 +389,9 @@ export default function ProfileScreen({ onNavigate, onLogOut }: ProfileScreenPro
                   maxLength={140}
                   multiline
                   numberOfLines={3}
-                  placeholder="Tell your squad a little about you..."
-                  style={{ borderWidth: 1, borderColor: c.line, borderRadius: 12, padding: 10, fontSize: 14, minHeight: 64 }}
+                  placeholder={userBio || "Tell your squad a little about you..."}
+                  placeholderTextColor="#94A3B8"
+                  style={{ borderWidth: 1, borderColor: c.line, borderRadius: 12, padding: 10, fontSize: 14, minHeight: 64, color: '#1E293B' }}
                 />
               </View>
 
@@ -395,7 +402,9 @@ export default function ProfileScreen({ onNavigate, onLogOut }: ProfileScreenPro
                     value={editCurrentWeight}
                     onChangeText={setEditCurrentWeight}
                     inputMode="decimal"
-                    style={{ borderWidth: 1, borderColor: c.line, borderRadius: 12, padding: 10, fontSize: 14 }}
+                    placeholder={`Current: ${currentWeight || 60} kg`}
+                    placeholderTextColor="#94A3B8"
+                    style={{ borderWidth: 1, borderColor: c.line, borderRadius: 12, padding: 10, fontSize: 14, color: '#1E293B' }}
                   />
                 </View>
                 <View style={{ flex: 1, gap: 4 }}>
@@ -404,7 +413,9 @@ export default function ProfileScreen({ onNavigate, onLogOut }: ProfileScreenPro
                     value={editTarget}
                     onChangeText={setEditTarget}
                     inputMode="decimal"
-                    style={{ borderWidth: 1, borderColor: c.line, borderRadius: 12, padding: 10, fontSize: 14 }}
+                    placeholder={`Target: ${targetWeight || 55} kg`}
+                    placeholderTextColor="#94A3B8"
+                    style={{ borderWidth: 1, borderColor: c.line, borderRadius: 12, padding: 10, fontSize: 14, color: '#1E293B' }}
                   />
                 </View>
               </Row>
@@ -415,7 +426,9 @@ export default function ProfileScreen({ onNavigate, onLogOut }: ProfileScreenPro
                   value={editGoal}
                   onChangeText={setEditGoal}
                   inputMode="numeric"
-                  style={{ borderWidth: 1, borderColor: c.line, borderRadius: 12, padding: 10, fontSize: 14 }}
+                  placeholder={`Target: ${calorieGoal} kcal`}
+                  placeholderTextColor="#94A3B8"
+                  style={{ borderWidth: 1, borderColor: c.line, borderRadius: 12, padding: 10, fontSize: 14, color: '#1E293B' }}
                 />
               </View>
 
@@ -426,7 +439,9 @@ export default function ProfileScreen({ onNavigate, onLogOut }: ProfileScreenPro
                     value={editProtein}
                     onChangeText={setEditProtein}
                     inputMode="numeric"
-                    style={{ borderWidth: 1, borderColor: c.line, borderRadius: 10, padding: 8, fontSize: 13 }}
+                    placeholder={`${proteinGoal}g`}
+                    placeholderTextColor="#94A3B8"
+                    style={{ borderWidth: 1, borderColor: c.line, borderRadius: 10, padding: 8, fontSize: 13, color: '#1E293B' }}
                   />
                 </View>
                 <View style={{ flex: 1, gap: 4 }}>
@@ -435,7 +450,9 @@ export default function ProfileScreen({ onNavigate, onLogOut }: ProfileScreenPro
                     value={editCarbs}
                     onChangeText={setEditCarbs}
                     inputMode="numeric"
-                    style={{ borderWidth: 1, borderColor: c.line, borderRadius: 10, padding: 8, fontSize: 13 }}
+                    placeholder={`${carbsGoal}g`}
+                    placeholderTextColor="#94A3B8"
+                    style={{ borderWidth: 1, borderColor: c.line, borderRadius: 10, padding: 8, fontSize: 13, color: '#1E293B' }}
                   />
                 </View>
                 <View style={{ flex: 1, gap: 4 }}>
@@ -444,7 +461,9 @@ export default function ProfileScreen({ onNavigate, onLogOut }: ProfileScreenPro
                     value={editFat}
                     onChangeText={setEditFat}
                     inputMode="numeric"
-                    style={{ borderWidth: 1, borderColor: c.line, borderRadius: 10, padding: 8, fontSize: 13 }}
+                    placeholder={`${fatGoal}g`}
+                    placeholderTextColor="#94A3B8"
+                    style={{ borderWidth: 1, borderColor: c.line, borderRadius: 10, padding: 8, fontSize: 13, color: '#1E293B' }}
                   />
                 </View>
               </Row>
@@ -578,7 +597,8 @@ export default function ProfileScreen({ onNavigate, onLogOut }: ProfileScreenPro
                 value={oldPassword}
                 onChangeText={setOldPassword}
                 placeholder="••••••••"
-                style={{ borderWidth: 1, borderColor: c.line, borderRadius: 12, padding: 10, fontSize: 14 }}
+                placeholderTextColor="#94A3B8"
+                style={{ borderWidth: 1, borderColor: c.line, borderRadius: 12, padding: 10, fontSize: 14, color: '#1E293B' }}
               />
             </View>
 
@@ -589,7 +609,8 @@ export default function ProfileScreen({ onNavigate, onLogOut }: ProfileScreenPro
                 value={newPassword}
                 onChangeText={setNewPassword}
                 placeholder="••••••••"
-                style={{ borderWidth: 1, borderColor: c.line, borderRadius: 12, padding: 10, fontSize: 14 }}
+                placeholderTextColor="#94A3B8"
+                style={{ borderWidth: 1, borderColor: c.line, borderRadius: 12, padding: 10, fontSize: 14, color: '#1E293B' }}
               />
             </View>
 
@@ -600,7 +621,8 @@ export default function ProfileScreen({ onNavigate, onLogOut }: ProfileScreenPro
                 value={confirmPassword}
                 onChangeText={setConfirmPassword}
                 placeholder="••••••••"
-                style={{ borderWidth: 1, borderColor: c.line, borderRadius: 12, padding: 10, fontSize: 14 }}
+                placeholderTextColor="#94A3B8"
+                style={{ borderWidth: 1, borderColor: c.line, borderRadius: 12, padding: 10, fontSize: 14, color: '#1E293B' }}
               />
             </View>
 
@@ -632,7 +654,8 @@ export default function ProfileScreen({ onNavigate, onLogOut }: ProfileScreenPro
                 value={deleteConfirmText}
                 onChangeText={setDeleteConfirmText}
                 placeholder="delete"
-                style={{ borderWidth: 1, borderColor: c.line, borderRadius: 12, padding: 10, fontSize: 14 }}
+                placeholderTextColor="#94A3B8"
+                style={{ borderWidth: 1, borderColor: c.line, borderRadius: 12, padding: 10, fontSize: 14, color: '#1E293B' }}
               />
             </View>
 

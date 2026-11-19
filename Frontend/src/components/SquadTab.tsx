@@ -249,7 +249,7 @@ function JoinOrCreate({
     <Card style={{ marginTop: 12, marginBottom: 12 }}>
       <Txt w="800" style={{ marginBottom: 8 }}>Join with an invite code</Txt>
       <Row style={{ gap: 8, marginBottom: 16 }}>
-        <TextInput value={code} onChangeText={setCode} placeholder="SQUAD-XXXXXX" autoCapitalize="characters" style={inputStyle as any} />
+        <TextInput value={code} onChangeText={setCode} placeholder="SQUAD-XXXXXX" placeholderTextColor="#94A3B8" autoCapitalize="characters" style={inputStyle as any} />
         <Btn
           onPress={async () => {
             if (!code.trim()) return;
@@ -263,7 +263,7 @@ function JoinOrCreate({
 
       <Txt w="800" style={{ marginBottom: 8 }}>Or start a new squad</Txt>
       <Row style={{ gap: 8 }}>
-        <TextInput value={name} onChangeText={setName} placeholder="Roomie Diet Squad" maxLength={40} style={inputStyle as any} />
+        <TextInput value={name} onChangeText={setName} placeholder="Roomie Diet Squad" placeholderTextColor="#94A3B8" maxLength={40} style={inputStyle as any} />
         <Btn
           bg={c.green}
           onPress={async () => {
