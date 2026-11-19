@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Pressable, TextInput, ScrollView, Image } from 'react-native-web';
 import { useApp } from '../context/AppContext';
+import FoodSearch from '../components/FoodSearch';
 import {
   Screen,
   Row,
@@ -459,7 +460,16 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
                 <Icon name="close" size={20} color={c.mute} />
               </Pressable>
             </Row>
-
+            <FoodSearch
+              onPick={(food) => {
+                setMealName(food.name);
+                setMealCategory(food.category === 'Beverages' ? 'Snacks' : food.category);
+                setMealKcal(String(food.calories));
+                setMealProtein(String(food.protein_g));
+                setMealCarbs(String(food.carbs_g));
+                setMealFat(String(food.fat_g));
+              }}
+            />
             <View style={{ gap: 4 }}>
               <Txt s={12} color={c.mute}>Meal / Dish Name</Txt>
               <TextInput
