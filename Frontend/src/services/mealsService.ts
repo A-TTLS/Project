@@ -410,7 +410,12 @@ export const mealsService = {
     q = '',
     filters?: { maxCalories?: number; highProtein?: boolean }
   ): Promise<any[]> {
-    if (!isSupabaseConfigured) return [];
+    console.log('[mealsService.searchMealsAndFoods] Searching with query (q):', `"${q}"`, 'Filters:', filters);
+
+    if (!isSupabaseConfigured) {
+      console.warn('[mealsService.searchMealsAndFoods] Supabase not configured. Returning empty array.');
+      return [];
+    }
 
     try {
       const searchTerm = q.trim();
@@ -435,7 +440,9 @@ export const mealsService = {
         .limit(20);
 
       if (catalogError) throw catalogError;
-      return catalogResults || [];
+      const results = catalogResults || [];
+      console.log(`[mealsService.searchMealsAndFoods] Found ${results.length} results for query (q): "${searchTerm}"`, results);
+      return results;
     } catch (err: any) {
       console.error('Error searching meals and foods:', err);
       return [];

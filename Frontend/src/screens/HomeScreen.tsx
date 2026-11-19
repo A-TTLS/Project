@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Pressable, TextInput, ScrollView, Image } from 'react-native-web';
 import { useApp } from '../context/AppContext';
+import { loadLocalFoods, searchLocalFoods, LocalFood } from '../services/localFoodSearch';
 import {
   Screen,
   Row,
@@ -110,6 +111,57 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
   const [mealProtein, setMealProtein] = useState('');
   const [mealCarbs, setMealCarbs] = useState('');
   const [mealFat, setMealFat] = useState('');
+
+  // Food Search Dataset & Autocomplete State
+  const [localFoods, setLocalFoods] = useState<LocalFood[]>([]);
+  const [foodSuggestions, setFoodSuggestions] = useState<LocalFood[]>([]);
+  const [isLoadingFoods, setIsLoadingFoods] = useState(false);
+  const [foodDatasetError, setFoodDatasetError] = useState<string | null>(null);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+
+  // Mount effect: Fetch optimized food dataset
+  useEffect(() => {
+    console.log('[HomeScreen] Component mounted. Attempting to fetch dataset from /datasets/optimized_foods.json (or .csv)...');
+    setIsLoadingFoods(true);
+    setFoodDatasetError(null);
+
+    loadLocalFoods()
+      .then((foods) => {
+        console.log(`[HomeScreen] Dataset successfully loaded! Total items in memory: ${foods.length}`);
+        setLocalFoods(foods);
+        setIsLoadingFoods(false);
+      })
+      .catch((err) => {
+        console.error('[HomeScreen] Failed to fetch or parse food dataset:', err);
+        setFoodDatasetError(err.message || 'Dataset file not found or failed to parse');
+        setIsLoadingFoods(false);
+      });
+  }, []);
+
+  const handleMealNameChange = (text: string) => {
+    setMealName(text);
+
+    if (!text.trim()) {
+      setFoodSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    const filtered = searchLocalFoods(localFoods, text);
+    console.log(`[HomeScreen search] User query (q): "${text}" | Filtered results count: ${filtered.length}`, filtered);
+    setFoodSuggestions(filtered);
+    setShowSuggestions(true);
+  };
+
+  const handleSelectFood = (food: LocalFood) => {
+    console.log('[HomeScreen] Selected food from suggestions:', food);
+    setMealName(food.name);
+    setMealKcal(food.calories.toString());
+    setMealProtein(food.protein_g.toString());
+    setMealCarbs(food.carbs_g.toString());
+    setMealFat(food.fat_g.toString());
+    setShowSuggestions(false);
+  };
 
   const progressPct = Math.min(100, Math.round((consumedKcal / calorieGoal) * 100));
   const remainingKcal = Math.max(0, calorieGoal - consumedKcal);
@@ -452,22 +504,108 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
       {/* Manual Add Meal Modal */}
       {showAddMealModal && (
         <View style={{ position: 'fixed' as any, top: 0, bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.65)', justifyContent: 'center', alignItems: 'center', padding: 16, zIndex: 999 }}>
-          <View style={{ width: '100%', maxWidth: 420, backgroundColor: c.card, borderRadius: 24, padding: 22, gap: 14 }}>
+          <View style={{ width: '100%', maxWidth: 420, backgroundColor: c.card, borderRadius: 24, padding: 22, gap: 14, overflow: 'visible' }}>
             <Row style={{ justifyContent: 'space-between', alignItems: 'center' }}>
               <Txt s={18} w="800">Add Meal Entry</Txt>
-              <Pressable onPress={() => setShowAddMealModal(false)}>
+              <Pressable onPress={() => { setShowAddMealModal(false); setShowSuggestions(false); }}>
                 <Icon name="close" size={20} color={c.mute} />
               </Pressable>
             </Row>
 
-            <View style={{ gap: 4 }}>
-              <Txt s={12} color={c.mute}>Meal / Dish Name</Txt>
+            {/* Meal / Dish Name with Search Dropdown */}
+            <View style={{ gap: 4, position: 'relative', zIndex: 100 }}>
+              <Row style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+                <Txt s={12} color={c.mute}>Meal / Dish Name</Txt>
+                {isLoadingFoods && <Txt s={10} color={c.mute}>Loading dataset...</Txt>}
+              </Row>
               <TextInput
                 value={mealName}
-                onChangeText={setMealName}
-                placeholder="e.g. Nasi Lemak Ayam Goreng"
-                style={{ borderWidth: 1, borderColor: c.line, borderRadius: 12, padding: 10, fontSize: 14 }}
+                onChangeText={handleMealNameChange}
+                onFocus={() => {
+                  if (mealName.trim()) setShowSuggestions(true);
+                }}
+                placeholder="Type to search (e.g. Chicken, Rice, Apple, Egg)..."
+                style={{ borderWidth: 1, borderColor: c.line, borderRadius: 12, padding: 10, fontSize: 14, backgroundColor: '#FFFFFF' }}
               />
+
+              {/* Search Results Dropdown with High Z-Index */}
+              {showSuggestions && (
+                <View
+                  style={{
+                    position: 'absolute',
+                    top: '100%',
+                    left: 0,
+                    right: 0,
+                    marginTop: 4,
+                    maxHeight: 220,
+                    backgroundColor: '#FFFFFF',
+                    borderWidth: 1,
+                    borderColor: c.line,
+                    borderRadius: 14,
+                    boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
+                    zIndex: 9999,
+                    elevation: 50,
+                    overflow: 'hidden',
+                  }}
+                >
+                  {/* Feedback State 1: Loading */}
+                  {isLoadingFoods && (
+                    <View style={{ padding: 14, alignItems: 'center', justifyContent: 'center' }}>
+                      <Txt s={12} color={c.mute}>⏳ Loading dataset...</Txt>
+                    </View>
+                  )}
+
+                  {/* Feedback State 2: Fetch / Parse Error */}
+                  {!isLoadingFoods && foodDatasetError && (
+                    <View style={{ padding: 14, alignItems: 'center', justifyContent: 'center' }}>
+                      <Txt s={12} color="#EF4444" style={{ textAlign: 'center' }}>
+                        ⚠️ Error loading dataset: {foodDatasetError}
+                      </Txt>
+                    </View>
+                  )}
+
+                  {/* Feedback State 3: No Results Found */}
+                  {!isLoadingFoods && !foodDatasetError && mealName.trim().length > 0 && foodSuggestions.length === 0 && (
+                    <View style={{ padding: 14, alignItems: 'center', justifyContent: 'center' }}>
+                      <Txt s={12} color={c.mute}>
+                        No results found for '{mealName.trim()}'
+                      </Txt>
+                    </View>
+                  )}
+
+                  {/* Filtered Results List */}
+                  {!isLoadingFoods && !foodDatasetError && foodSuggestions.length > 0 && (
+                    <ScrollView style={{ maxHeight: 200 }} nestedScrollEnabled>
+                      {foodSuggestions.map((item) => (
+                        <Pressable
+                          key={item.id}
+                          onPress={() => handleSelectFood(item)}
+                          style={({ hovered }: any) => ({
+                            paddingVertical: 10,
+                            paddingHorizontal: 12,
+                            borderBottomWidth: 1,
+                            borderBottomColor: c.line,
+                            backgroundColor: hovered ? '#F3F4F6' : '#FFFFFF',
+                            cursor: 'pointer',
+                          })}
+                        >
+                          <Row style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Txt s={13} w="700" style={{ flex: 1, marginRight: 8 }} numberOfLines={1}>
+                              {item.name}
+                            </Txt>
+                            <Txt s={12} w="800" color="#EAB308">
+                              {item.calories} kcal
+                            </Txt>
+                          </Row>
+                          <Txt s={10} color={c.mute} style={{ marginTop: 2 }}>
+                            Per {item.serving_size} · P: {item.protein_g}g · C: {item.carbs_g}g · F: {item.fat_g}g
+                          </Txt>
+                        </Pressable>
+                      ))}
+                    </ScrollView>
+                  )}
+                </View>
+              )}
             </View>
 
             {/* Category Select */}
