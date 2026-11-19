@@ -90,7 +90,7 @@ export const Btn = ({ children, bg = c.yellow, onPress, style, disabled = false 
   <Pressable
     disabled={disabled}
     onPress={disabled ? undefined : onPress}
-    style={({ pressed }) => [st.btn, { backgroundColor: bg, opacity: disabled ? 0.55 : 1 }, pressed && !disabled && { opacity: 0.8 }, style]}
+    style={({ pressed }: { pressed: boolean }) => [st.btn, { backgroundColor: bg, opacity: disabled ? 0.55 : 1 }, pressed && !disabled && { opacity: 0.8 }, style]}
   >
     <Txt w="700">{children}</Txt>
   </Pressable>
@@ -99,7 +99,7 @@ export const Btn = ({ children, bg = c.yellow, onPress, style, disabled = false 
 export const IconBox = ({ size = 36, label = '', onPress }: { size?: number; label?: string; onPress?: () => void }) => (
   <Pressable
     onPress={onPress}
-    style={({ pressed }) => [
+    style={({ pressed }: { pressed: boolean }) => [
       {
         width: size,
         height: size,
@@ -398,7 +398,7 @@ export function ActionButton({
       accessibilityRole="button"
       disabled={disabled}
       onPress={onPress}
-      style={({ pressed }) => [
+      style={({ pressed }: { pressed: boolean }) => [
         st.action,
         primary ? st.primaryAction : st.secondaryAction,
         pressed && st.pressed,
@@ -437,7 +437,7 @@ export function PageHeader({
             accessibilityLabel="Go back"
             accessibilityRole="button"
             onPress={onBack}
-            style={({ pressed }) => [st.backButton, pressed && st.pressed]}
+            style={({ pressed }: { pressed: boolean }) => [st.backButton, pressed && st.pressed]}
           >
             <Icon name="arrowLeft" size={20} />
           </Pressable>

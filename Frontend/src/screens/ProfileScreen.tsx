@@ -301,7 +301,7 @@ export default function ProfileScreen({ onNavigate, onLogOut }: ProfileScreenPro
           <Pressable
             key={item.label}
             onPress={item.action}
-            style={({ pressed }) => [
+            style={({ pressed }: { pressed: boolean }) => [
               {
                 flexDirection: 'row',
                 justifyContent: 'space-between',

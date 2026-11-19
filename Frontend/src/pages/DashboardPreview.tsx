@@ -33,7 +33,7 @@ export default function DashboardPreview({
         <Pressable
           accessibilityRole="button"
           onPress={onSignOut}
-          style={({ pressed }) => [styles.signOutBtn, pressed && styles.pressed]}
+          style={({ pressed }: { pressed: boolean }) => [styles.signOutBtn, pressed && styles.pressed]}
         >
           <Text style={styles.signOutText}>Sign Out</Text>
         </Pressable>
@@ -87,7 +87,7 @@ export default function DashboardPreview({
         <Pressable
           accessibilityRole="button"
           onPress={() => alert("AI Vision Snap feature is being linked with backend food model!")}
-          style={({ pressed }) => [styles.snapBtn, pressed && styles.pressed]}
+          style={({ pressed }: { pressed: boolean }) => [styles.snapBtn, pressed && styles.pressed]}
         >
           <Icon name="camera" size={24} />
           <Text style={styles.snapBtnText}>Snap a Meal with AI</Text>
