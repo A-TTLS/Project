@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Pressable, ActivityIndicator } from 'react-native-web';
 import { useApp, type CapturedMeal } from '../context/AppContext';
-import { Row, Txt, IconBox, Pill, TabBar, c } from '../ui';
+import { Row, Txt, IconBox, Pill, c } from '../ui';
 import {
   analyzeFoodImage,
   testGeminiConnection,
@@ -634,7 +634,7 @@ export default function ScanScreen({ onNavigate }: ScanScreenProps) {
             alignItems: 'center',
             paddingHorizontal: 36,
             marginTop: 24,
-            marginBottom: 120,
+            marginBottom: 36,
           }}
         >
           <Pressable
@@ -693,14 +693,6 @@ export default function ScanScreen({ onNavigate }: ScanScreenProps) {
           </Pressable>
         </Row>
       )}
-
-      <TabBar
-        active="Scan"
-        onSelectTab={(tab) => {
-          stopStream();
-          onNavigate(tab);
-        }}
-      />
     </View>
   );
 }

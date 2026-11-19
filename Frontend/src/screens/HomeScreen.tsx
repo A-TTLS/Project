@@ -13,6 +13,7 @@ import {
   SectionHead,
   Btn,
   Ring,
+  TwoToneCalorieRing,
   Icon,
   c,
 } from '../ui';
@@ -163,8 +164,11 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
     setShowSuggestions(false);
   };
 
-  const progressPct = Math.min(100, Math.round((consumedKcal / calorieGoal) * 100));
-  const remainingKcal = Math.max(0, calorieGoal - consumedKcal);
+  const safeGoal = Math.max(1, Number(calorieGoal) || 2000);
+  const safeConsumed = Math.max(0, Number(consumedKcal) || 0);
+  const safeBurned = Math.max(0, Number(burnedKcal) || 0);
+  const remainingKcal = Math.max(0, Math.round(safeGoal - safeConsumed + safeBurned));
+  const progressPct = Math.min(100, Math.round((safeConsumed / safeGoal) * 100));
 
   // Today formatted date
   const todayFormatted = new Date().toLocaleDateString('en-GB', {
@@ -198,7 +202,7 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
   };
 
   return (
-    <Screen tab="Home" onSelectTab={onNavigate}>
+    <Screen tab="Home" onSelectTab={onNavigate} hideTabBar={showAddMealModal}>
       {/* Top Header */}
       <Row style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
         <Row style={{ alignItems: 'center' }}>
@@ -260,30 +264,38 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
           </Pressable>
         </Row>
 
-        {/* Center Ring Display */}
+        {/* Center Ring Display - Two-Tone Daily Calorie Ring */}
         <View style={{ marginVertical: 20, alignItems: 'center', justifyContent: 'center' }}>
-          <Ring size={190} />
-          <View style={{ position: 'absolute', alignItems: 'center' }}>
-            <Txt s={38} w="800">{consumedKcal.toLocaleString()}</Txt>
-            <Txt s={12} color={c.mute}>/ {calorieGoal.toLocaleString()} kcal</Txt>
-            <View style={{ marginTop: 4, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, backgroundColor: '#E2F1F8' }}>
-              <Txt s={10} w="700" color="#2F586E">
-                {remainingKcal > 0 ? `${remainingKcal.toLocaleString()} kcal left` : 'Goal achieved! 🎉'}
-              </Txt>
+          <TwoToneCalorieRing
+            size={190}
+            strokeWidth={14}
+            consumed={safeConsumed}
+            goal={safeGoal}
+            trackColor="#E0F2FE"
+            progressColor="#0284C7"
+          >
+            <View style={{ alignItems: 'center' }}>
+              <Txt s={38} w="800">{safeConsumed.toLocaleString()}</Txt>
+              <Txt s={12} color={c.mute}>/ {safeGoal.toLocaleString()} kcal</Txt>
+              <View style={{ marginTop: 6, paddingHorizontal: 10, paddingVertical: 3, borderRadius: 8, backgroundColor: '#E0F2FE' }}>
+                <Txt s={10} w="700" color="#0369A1">
+                  {remainingKcal > 0 ? `${remainingKcal.toLocaleString()} kcal left` : 'Goal achieved! 🎉'}
+                </Txt>
+              </View>
             </View>
-          </View>
+          </TwoToneCalorieRing>
         </View>
 
         {/* Consumed vs Burned vs Remaining */}
         <Row style={{ alignSelf: 'stretch', justifyContent: 'space-around', paddingTop: 14, borderTopWidth: 1, borderColor: '#C4E4F3' }}>
           <View style={{ alignItems: 'center' }}>
             <Txt s={11} color="#527D93">Consumed</Txt>
-            <Txt s={15} w="800">{consumedKcal} kcal</Txt>
+            <Txt s={15} w="800">{safeConsumed} kcal</Txt>
           </View>
           <View style={{ height: 28, width: 1, backgroundColor: '#C4E4F3' }} />
           <View style={{ alignItems: 'center' }}>
             <Txt s={11} color="#527D93">Burned</Txt>
-            <Txt s={15} w="800">{burnedKcal} kcal</Txt>
+            <Txt s={15} w="800">{safeBurned} kcal</Txt>
           </View>
           <View style={{ height: 28, width: 1, backgroundColor: '#C4E4F3' }} />
           <View style={{ alignItems: 'center' }}>
@@ -525,7 +537,8 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
                   if (mealName.trim()) setShowSuggestions(true);
                 }}
                 placeholder="Type to search (e.g. Chicken, Rice, Apple, Egg)..."
-                style={{ borderWidth: 1, borderColor: c.line, borderRadius: 12, padding: 10, fontSize: 14, backgroundColor: '#FFFFFF' }}
+                placeholderTextColor="#94A3B8"
+                style={{ borderWidth: 1, borderColor: c.line, borderRadius: 12, padding: 10, fontSize: 14, backgroundColor: '#FFFFFF', color: '#1E293B' }}
               />
 
               {/* Search Results Dropdown with High Z-Index */}
@@ -649,7 +662,8 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
                 onChangeText={setMealKcal}
                 inputMode="numeric"
                 placeholder="e.g. 520"
-                style={{ borderWidth: 1, borderColor: c.line, borderRadius: 12, padding: 10, fontSize: 14 }}
+                placeholderTextColor="#94A3B8"
+                style={{ borderWidth: 1, borderColor: c.line, borderRadius: 12, padding: 10, fontSize: 14, color: '#1E293B' }}
               />
             </View>
 
@@ -661,7 +675,8 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
                   onChangeText={setMealProtein}
                   inputMode="decimal"
                   placeholder="25"
-                  style={{ borderWidth: 1, borderColor: c.line, borderRadius: 10, padding: 8, fontSize: 13 }}
+                  placeholderTextColor="#94A3B8"
+                  style={{ borderWidth: 1, borderColor: c.line, borderRadius: 10, padding: 8, fontSize: 13, color: '#1E293B' }}
                 />
               </View>
               <View style={{ flex: 1, gap: 4 }}>
@@ -671,7 +686,8 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
                   onChangeText={setMealCarbs}
                   inputMode="decimal"
                   placeholder="55"
-                  style={{ borderWidth: 1, borderColor: c.line, borderRadius: 10, padding: 8, fontSize: 13 }}
+                  placeholderTextColor="#94A3B8"
+                  style={{ borderWidth: 1, borderColor: c.line, borderRadius: 10, padding: 8, fontSize: 13, color: '#1E293B' }}
                 />
               </View>
               <View style={{ flex: 1, gap: 4 }}>
@@ -681,7 +697,8 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
                   onChangeText={setMealFat}
                   inputMode="decimal"
                   placeholder="14"
-                  style={{ borderWidth: 1, borderColor: c.line, borderRadius: 10, padding: 8, fontSize: 13 }}
+                  placeholderTextColor="#94A3B8"
+                  style={{ borderWidth: 1, borderColor: c.line, borderRadius: 10, padding: 8, fontSize: 13, color: '#1E293B' }}
                 />
               </View>
             </Row>

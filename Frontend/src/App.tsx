@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, ScrollView, Pressable, SafeAreaView } from 'react-native-web';
 import { AppProvider, useApp } from './context/AppContext';
 import LandingPage from './pages/LandingPage';
@@ -30,19 +30,34 @@ function AppContent() {
     });
   }, []);
 
-  // Onboarding state
+  // Onboarding state - blank initial inputs for real user biometrics
   const [user, setUser] = useState<UserProfile | null>(null);
   const [measurements, setMeasurements] = useState<UserMeasurements>({
-    gender: 'Female',
-    age: '21',
-    height: '158',
-    weight: '48.5',
-    target: '48',
+    gender: '' as any,
+    age: '',
+    height: '',
+    weight: '',
+    target: '',
     units: 'metric',
   });
   const [activityLevel, setActivityLevel] = useState<ActivityLevel>('moderate');
 
-  const { toastMessage, reloadUserData } = useApp();
+  const { toastMessage, reloadUserData, userId, hasCompletedOnboarding } = useApp();
+  const hasAutoRedirected = useRef(false);
+
+  // Auto-route first-time Google sign-up / login to Profile Setup once if biometrics not yet completed
+  useEffect(() => {
+    if (!userId) {
+      hasAutoRedirected.current = false;
+      return;
+    }
+
+    if (!hasAutoRedirected.current && hasCompletedOnboarding === false) {
+      hasAutoRedirected.current = true;
+      console.log('[CalorieSnap Auth] First-time login detected without biometrics — routing to Profile Setup');
+      setCurrentScreen('Profile Setup');
+    }
+  }, [userId, hasCompletedOnboarding]);
 
   const allScreens = [
     'Home',
@@ -108,7 +123,13 @@ function AppContent() {
           <LoginPage
             onGoBack={() => setCurrentScreen('Landing Page')}
             onGoToRegister={() => setCurrentScreen('Register')}
-            onSignedIn={() => setCurrentScreen('Home')}
+            onSignedIn={() => {
+              if (hasCompletedOnboarding === false) {
+                setCurrentScreen('Profile Setup');
+              } else {
+                setCurrentScreen('Home');
+              }
+            }}
           />
         );
       case 'Register':
@@ -128,7 +149,7 @@ function AppContent() {
         return (
           <MeasurementsPage
             initialValues={measurements}
-            onBack={() => setCurrentScreen('Register')}
+            onBack={() => setCurrentScreen('Home')}
             onChange={setMeasurements}
             onContinue={() => setCurrentScreen('Activity Setup')}
           />

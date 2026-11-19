@@ -90,6 +90,8 @@ interface AppContextType {
   proteinGoal: number;
   carbsGoal: number;
   fatGoal: number;
+  hasCompletedOnboarding: boolean | null;
+  setHasCompletedOnboarding: (val: boolean | null) => void;
   setCurrentUser: (u: { id?: string; email?: string; name?: string; username?: string }) => Promise<void>;
   updateProfile: (profile: Partial<{
     name: string;
@@ -259,6 +261,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [fatGoal, setFatGoal] = useState<number>(
     Number(initialCache.fatGoal ?? initialCache.target_fat_g) || 50
   );
+
+  // User onboarding completion status
+  const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState<boolean | null>(() => {
+    try {
+      const cached = localStorage.getItem('caloriesnap_onboarding_data');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed.current_weight_kg && parsed.height_cm) return true;
+      }
+    } catch {}
+    return null;
+  });
 
   // Daily Metrics (Dynamic per day, cleanly resets to 0 on a new day)
   const [burnedKcal, setBurnedKcal] = useState<number>(initialDay.burned);
@@ -437,6 +451,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         .maybeSingle();
 
       if (profile) {
+        const isComplete = Boolean(
+          (profile.height_cm && profile.current_weight_kg) ||
+          (profile.daily_calorie_target && profile.daily_calorie_target !== 1850) ||
+          localStorage.getItem('caloriesnap_onboarding_completed') === 'true'
+        );
+        setHasCompletedOnboarding(isComplete);
+
         if (profile.full_name) setUserName(profile.full_name);
         if (profile.username) {
           const raw = profile.username.startsWith('@') ? profile.username : `@${profile.username}`;
@@ -478,6 +499,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           }));
         } catch {}
       } else {
+        setHasCompletedOnboarding(false);
         // Self-heal: ensure profiles row exists in database for this authenticated user
         await supabase.from('profiles').upsert({
           id: user.id,
@@ -906,6 +928,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (patch.proteinGoal !== undefined) setProteinGoal(patch.proteinGoal);
     if (patch.carbsGoal !== undefined) setCarbsGoal(patch.carbsGoal);
     if (patch.fatGoal !== undefined) setFatGoal(patch.fatGoal);
+    if (patch.currentWeight || patch.calorieGoal) {
+      setHasCompletedOnboarding(true);
+      try { localStorage.setItem('caloriesnap_onboarding_completed', 'true'); } catch {}
+    }
 
     try {
       const prev = JSON.parse(localStorage.getItem('caloriesnap_profile_cache') || '{}');
@@ -962,6 +988,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setStepsCount(0);
     setWorkoutMins(0);
     setBurnedKcal(0);
+    setHasCompletedOnboarding(null);
     try {
       localStorage.removeItem('caloriesnap_profile_cache');
       localStorage.removeItem('caloriesnap_onboarding_data');
@@ -1081,6 +1108,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         proteinGoal,
         carbsGoal,
         fatGoal,
+        hasCompletedOnboarding,
+        setHasCompletedOnboarding,
         setCurrentUser,
         updateProfile,
         signOut,

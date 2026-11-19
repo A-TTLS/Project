@@ -264,7 +264,7 @@ export default function RewardsScreen({ onNavigate }: RewardsScreenProps) {
   };
 
   return (
-    <Screen tab="Profile" onSelectTab={onNavigate}>
+    <Screen hideTabBar onSelectTab={onNavigate}>
       {/* Top Header */}
       <Row style={{ alignItems: 'center', marginBottom: 12 }}>
         <IconBox label="←" onPress={() => onNavigate('Home')} />

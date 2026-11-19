@@ -49,13 +49,21 @@ export function estimateTarget(m: UserMeasurements, level: ActivityLevel) {
 
   // Small caloric deficit or surplus based on target goal
   const adjust = targetKg < kg ? -250 : targetKg > kg ? 250 : 0;
-  const kcal = Math.max(1200, Math.round((bmr * factor + adjust) / 10) * 10);
+  const rawTargetKcal = Math.max(1200, Math.round((bmr * factor + adjust) / 10) * 10);
+
+  // Balanced macro distribution:
+  // Protein (25% kcal, 4 kcal/g), Fat (25% kcal, 9 kcal/g), Carbs (50% remaining kcal, 4 kcal/g)
+  const protein = Math.max(45, Math.round((rawTargetKcal * 0.25) / 4));
+  const fat = Math.max(30, Math.round((rawTargetKcal * 0.25) / 9));
+  const carbs = Math.max(50, Math.round((rawTargetKcal - (protein * 4 + fat * 9)) / 4));
+  // Ensure total calories precisely match Protein * 4 + Carbs * 4 + Fat * 9
+  const kcal = protein * 4 + carbs * 4 + fat * 9;
 
   return {
     kcal,
-    carbs: Math.round((kcal * 0.5) / 4), // 50% calories from carbs (4 kcal/g)
-    protein: Math.round((kcal * 0.25) / 4), // 25% calories from protein (4 kcal/g)
-    fat: Math.round((kcal * 0.25) / 9), // 25% calories from fat (9 kcal/g)
+    carbs,
+    protein,
+    fat,
   };
 }
 
@@ -75,7 +83,7 @@ export default function ActivityPage({
   onComplete,
 }: ActivityPageProps) {
   const [isSaving, setIsSaving] = useState(false);
-  const { updateProfile, reloadUserData } = useApp();
+  const { updateProfile, reloadUserData, setHasCompletedOnboarding } = useApp();
   const target = estimateTarget(measurements, level);
 
   const macros = [
@@ -101,6 +109,8 @@ export default function ActivityPage({
       carbsGoal: target.carbs,
       fatGoal: target.fat,
     });
+    setHasCompletedOnboarding(true);
+    try { localStorage.setItem('caloriesnap_onboarding_completed', 'true'); } catch {}
     await reloadUserData();
     setIsSaving(false);
     onComplete();
