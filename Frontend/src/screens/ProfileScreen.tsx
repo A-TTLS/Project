@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Pressable, TextInput, ScrollView, Switch } from 'react-native-web';
 import { useApp } from '../context/AppContext';
+import { useProfileStats } from '../hooks/useProfileStats';
 import {
   Screen,
   Row,
@@ -43,6 +44,9 @@ export default function ProfileScreen({ onNavigate, onLogOut }: ProfileScreenPro
     showToast,
   } = useApp();
 
+  const live = useProfileStats();
+  const shownStreak = live?.streakDays ?? streakDays;
+  const shownPoints = live?.snapPoints ?? snapPoints;
   // Modals state
   const [isEditing, setIsEditing] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
@@ -181,19 +185,19 @@ export default function ProfileScreen({ onNavigate, onLogOut }: ProfileScreenPro
 
         <Row style={{ gap: 8, marginTop: 4, flexWrap: 'wrap', justifyContent: 'center' }}>
           <Pressable onPress={() => onNavigate('Rewards')}>
-            <Pill active bg={c.yellow}>🔥 {streakDays}-Day Streak</Pill>
+            <Pill active bg={c.yellow}>🔥 {shownStreak}-Day Streak</Pill>
           </Pressable>
           <Pressable onPress={() => onNavigate('Rewards')}>
-            <Pill bg={c.blue}>🎁 {snapPoints.toLocaleString()} SnapPoints</Pill>
+            <Pill bg={c.blue}>🎁 {shownPoints.toLocaleString()} SnapPoints</Pill>
           </Pressable>
         </Row>
 
         {/* Social Network Counters */}
         <Row style={{ width: '100%', justifyContent: 'space-around', marginTop: 18, paddingTop: 14, borderTopWidth: 1, borderColor: c.line }}>
           {[
-            [String(followersCount), 'Followers'],
-            [String(followingCount), 'Following'],
-            [String(groupsCount), 'Circles'],
+            [String(live?.followers ?? followersCount), 'Followers'],
+            [String(live?.following ?? followingCount), 'Following'],
+            [String(live?.circles ?? groupsCount), 'Circles'],
           ].map(([n, l]) => (
             <Pressable key={l} onPress={() => onNavigate('Social')} style={{ alignItems: 'center' }}>
               <Txt s={18} w="800">{n}</Txt>
@@ -262,7 +266,7 @@ export default function ProfileScreen({ onNavigate, onLogOut }: ProfileScreenPro
         </Row>
 
         <Txt s={28} w="800" style={{ marginVertical: 8 }}>
-          {snapPoints.toLocaleString()} <Txt s={16} w="600">pts</Txt>
+          {shownPoints.toLocaleString()} <Txt s={16} w="600">pts</Txt>
         </Txt>
 
         <Card style={{ marginBottom: 12, padding: 12 }}>
