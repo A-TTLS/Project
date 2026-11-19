@@ -102,7 +102,7 @@ export default function LoginPage({
           <Pressable
             accessibilityRole="button"
             onPress={onGoBack}
-            style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}
+            style={({ pressed }: { pressed: boolean }) => [styles.backBtn, pressed && styles.pressed]}
           >
             <Icon name="arrowLeft" size={18} />
           </Pressable>
@@ -215,7 +215,7 @@ export default function LoginPage({
             accessibilityRole="button"
             disabled={isGoogleLoading}
             onPress={handleGoogleSignIn}
-            style={({ pressed }) => [styles.oauthBtn, pressed && styles.pressed]}
+            style={({ pressed }: { pressed: boolean }) => [styles.oauthBtn, pressed && styles.pressed]}
           >
             {isGoogleLoading ? (
               <ActivityIndicator color={colors.ink} size="small" />
@@ -230,7 +230,7 @@ export default function LoginPage({
           <Pressable
             accessibilityRole="button"
             onPress={() => setMessage({ type: "info", text: "Apple Sign-In is configured for iOS devices." })}
-            style={({ pressed }) => [styles.oauthBtn, pressed && styles.pressed]}
+            style={({ pressed }: { pressed: boolean }) => [styles.oauthBtn, pressed && styles.pressed]}
           >
             <Icon name="apple" size={18} />
             <Text style={styles.oauthBtnText}>Apple</Text>
