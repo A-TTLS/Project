@@ -83,7 +83,7 @@ export default function ActivityPage({
   onComplete,
 }: ActivityPageProps) {
   const [isSaving, setIsSaving] = useState(false);
-  const { updateProfile, reloadUserData } = useApp();
+  const { updateProfile, reloadUserData, setHasCompletedOnboarding } = useApp();
   const target = estimateTarget(measurements, level);
 
   const macros = [
@@ -109,6 +109,8 @@ export default function ActivityPage({
       carbsGoal: target.carbs,
       fatGoal: target.fat,
     });
+    setHasCompletedOnboarding(true);
+    try { localStorage.setItem('caloriesnap_onboarding_completed', 'true'); } catch {}
     await reloadUserData();
     setIsSaving(false);
     onComplete();

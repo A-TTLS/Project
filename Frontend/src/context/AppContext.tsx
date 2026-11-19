@@ -452,9 +452,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       if (profile) {
         const isComplete = Boolean(
-          profile.height_cm &&
-          profile.current_weight_kg &&
-          (profile.age || profile.gender || profile.daily_calorie_target)
+          (profile.height_cm && profile.current_weight_kg) ||
+          (profile.daily_calorie_target && profile.daily_calorie_target !== 1850) ||
+          localStorage.getItem('caloriesnap_onboarding_completed') === 'true'
         );
         setHasCompletedOnboarding(isComplete);
 
@@ -928,6 +928,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (patch.proteinGoal !== undefined) setProteinGoal(patch.proteinGoal);
     if (patch.carbsGoal !== undefined) setCarbsGoal(patch.carbsGoal);
     if (patch.fatGoal !== undefined) setFatGoal(patch.fatGoal);
+    if (patch.currentWeight || patch.calorieGoal) {
+      setHasCompletedOnboarding(true);
+      try { localStorage.setItem('caloriesnap_onboarding_completed', 'true'); } catch {}
+    }
 
     try {
       const prev = JSON.parse(localStorage.getItem('caloriesnap_profile_cache') || '{}');

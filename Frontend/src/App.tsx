@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, ScrollView, Pressable, SafeAreaView } from 'react-native-web';
 import { AppProvider, useApp } from './context/AppContext';
 import LandingPage from './pages/LandingPage';
@@ -43,16 +43,21 @@ function AppContent() {
   const [activityLevel, setActivityLevel] = useState<ActivityLevel>('moderate');
 
   const { toastMessage, reloadUserData, userId, hasCompletedOnboarding } = useApp();
+  const hasAutoRedirected = useRef(false);
 
-  // Auto-route first-time Google sign-up / login to Profile Setup if biometrics not yet completed
+  // Auto-route first-time Google sign-up / login to Profile Setup once if biometrics not yet completed
   useEffect(() => {
-    if (userId && hasCompletedOnboarding === false) {
-      if (currentScreen !== 'Profile Setup' && currentScreen !== 'Activity Setup' && currentScreen !== 'Register') {
-        console.log('[CalorieSnap Auth] First-time login detected without biometrics — routing to Profile Setup');
-        setCurrentScreen('Profile Setup');
-      }
+    if (!userId) {
+      hasAutoRedirected.current = false;
+      return;
     }
-  }, [userId, hasCompletedOnboarding, currentScreen]);
+
+    if (!hasAutoRedirected.current && hasCompletedOnboarding === false) {
+      hasAutoRedirected.current = true;
+      console.log('[CalorieSnap Auth] First-time login detected without biometrics — routing to Profile Setup');
+      setCurrentScreen('Profile Setup');
+    }
+  }, [userId, hasCompletedOnboarding]);
 
   const allScreens = [
     'Home',
@@ -144,7 +149,7 @@ function AppContent() {
         return (
           <MeasurementsPage
             initialValues={measurements}
-            onBack={() => setCurrentScreen('Register')}
+            onBack={() => setCurrentScreen('Home')}
             onChange={setMeasurements}
             onContinue={() => setCurrentScreen('Activity Setup')}
           />
