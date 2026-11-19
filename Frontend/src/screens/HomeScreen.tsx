@@ -602,17 +602,27 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
                             cursor: 'pointer',
                           })}
                         >
-                          <Row style={{ justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Txt s={13} w="700" style={{ flex: 1, marginRight: 8 }} numberOfLines={1}>
-                              {item.name}
-                            </Txt>
-                            <Txt s={12} w="800" color="#EAB308">
-                              {item.calories} kcal
-                            </Txt>
+                          <Row style={{ alignItems: 'center', gap: 10 }}>
+                            {item.image_url ? (
+                              <Image
+                                source={{ uri: item.image_url }}
+                                style={{ width: 36, height: 36, borderRadius: 8, backgroundColor: '#E5E7EB' }}
+                              />
+                            ) : null}
+                            <View style={{ flex: 1 }}>
+                              <Row style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+                                <Txt s={13} w="700" style={{ flex: 1, marginRight: 8 }} numberOfLines={1}>
+                                  {item.source === 'malaysian' ? '🇲🇾 ' : ''}{item.name}
+                                </Txt>
+                                <Txt s={12} w="800" color="#EAB308">
+                                  {item.calories} kcal
+                                </Txt>
+                              </Row>
+                              <Txt s={10} color={c.mute} style={{ marginTop: 2 }}>
+                                Per {item.serving_size} · P: {item.protein_g}g · C: {item.carbs_g}g · F: {item.fat_g}g
+                              </Txt>
+                            </View>
                           </Row>
-                          <Txt s={10} color={c.mute} style={{ marginTop: 2 }}>
-                            Per {item.serving_size} · P: {item.protein_g}g · C: {item.carbs_g}g · F: {item.fat_g}g
-                          </Txt>
                         </Pressable>
                       ))}
                     </ScrollView>

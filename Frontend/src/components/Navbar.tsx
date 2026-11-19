@@ -58,7 +58,7 @@ export default function Navbar({ currentPage, onNavigate }: NavbarProps) {
           <Pressable
             accessibilityRole="button"
             onPress={() => onNavigate("login")}
-            style={({ pressed }) => [
+            style={({ pressed }: { pressed: boolean }) => [
               styles.signInBtn,
               currentPage === "login" && styles.btnSelected,
               pressed && styles.pressed,
@@ -70,7 +70,7 @@ export default function Navbar({ currentPage, onNavigate }: NavbarProps) {
           <Pressable
             accessibilityRole="button"
             onPress={() => onNavigate("register")}
-            style={({ pressed }) => [
+            style={({ pressed }: { pressed: boolean }) => [
               styles.getStartedBtn,
               currentPage === "register" && styles.btnSelected,
               pressed && styles.pressed,

@@ -73,7 +73,7 @@ export default function LandingPage({ onNavigate }: LandingPageProps) {
               <Pressable
                 accessibilityRole="button"
                 onPress={() => onNavigate("register")}
-                style={({ pressed }) => [styles.primaryCta, pressed && styles.pressed]}
+                style={({ pressed }: { pressed: boolean }) => [styles.primaryCta, pressed && styles.pressed]}
               >
                 <Text style={styles.primaryCtaText}>Start Free Today</Text>
                 <Icon name="arrow" size={16} />
@@ -82,7 +82,7 @@ export default function LandingPage({ onNavigate }: LandingPageProps) {
               <Pressable
                 accessibilityRole="button"
                 onPress={() => onNavigate("login")}
-                style={({ pressed }) => [styles.secondaryCta, pressed && styles.pressed]}
+                style={({ pressed }: { pressed: boolean }) => [styles.secondaryCta, pressed && styles.pressed]}
               >
                 <Text style={styles.secondaryCtaText}>Sign In</Text>
               </Pressable>

@@ -6,6 +6,7 @@
 import { supabase, isSupabaseConfigured } from './supabaseClient';
 import { calculateStreakFromDates } from './nutritionService';
 import { uploadMealImage } from './mealImageUpload';
+import { loadLocalFoods, searchLocalFoods, LocalFood } from './localFoodSearch';
 
 export interface DbMeal {
   id?: string;
@@ -403,48 +404,69 @@ export const mealsService = {
 
   /**
    * 3. Food & Meals Search Function
-   * Searches both logged meals and the Malaysian campus food catalog
-   * with case-insensitive pattern matching (.ilike) and optional nutrition filters.
+   * Searches the unified local dataset (Malaysian foods from myFood11 + malay-dishes-dataset
+   * combined with USDA FoodData Central) and merges with Supabase catalog results.
    */
   async searchMealsAndFoods(
     q = '',
     filters?: { maxCalories?: number; highProtein?: boolean }
   ): Promise<any[]> {
-    console.log('[mealsService.searchMealsAndFoods] Searching with query (q):', `"${q}"`, 'Filters:', filters);
+    console.log('[mealsService.searchMealsAndFoods] Starting search with query (q):', `"${q}"`, 'Filters:', filters);
 
-    if (!isSupabaseConfigured) {
-      console.warn('[mealsService.searchMealsAndFoods] Supabase not configured. Returning empty array.');
+    const searchTerm = (q || '').trim();
+    if (!searchTerm) {
+      console.log('[mealsService.searchMealsAndFoods] Empty query, returning empty array.');
       return [];
     }
 
     try {
-      const searchTerm = q.trim();
-      let query = supabase
-        .from('food_catalog')
-        .select('*');
+      // 1. Fetch from Unified Local Catalog (Malaysian Dishes + USDA)
+      const localFoods = await loadLocalFoods();
+      const localResults = searchLocalFoods(localFoods, searchTerm, 20, filters);
 
-      if (searchTerm) {
-        query = query.ilike('name', `%${searchTerm}%`);
+      // 2. Optionally query Supabase food_catalog if online
+      let remoteResults: any[] = [];
+      if (isSupabaseConfigured) {
+        try {
+          let query = supabase.from('food_catalog').select('*').ilike('name', `%${searchTerm}%`);
+          if (filters?.maxCalories) query = query.lte('calories', filters.maxCalories);
+          if (filters?.highProtein) query = query.gte('protein_g', 20);
+          const { data } = await query.limit(10);
+          if (data) remoteResults = data;
+        } catch (supabaseErr) {
+          console.warn('[mealsService.searchMealsAndFoods] Supabase catalog query failed, using local results:', supabaseErr);
+        }
       }
 
-      if (filters?.maxCalories) {
-        query = query.lte('calories', filters.maxCalories);
+      // 3. Merge & Deduplicate
+      const seenNames = new Set<string>();
+      const unified: any[] = [];
+
+      // Add local results first (prioritizing Malaysian dishes)
+      for (const item of localResults) {
+        const key = item.name.toLowerCase().trim();
+        if (!seenNames.has(key)) {
+          seenNames.add(key);
+          unified.push(item);
+        }
       }
 
-      if (filters?.highProtein) {
-        query = query.gte('protein_g', 20);
+      // Add any additional remote results
+      for (const item of remoteResults) {
+        const key = item.name.toLowerCase().trim();
+        if (!seenNames.has(key)) {
+          seenNames.add(key);
+          unified.push(item);
+        }
       }
 
-      const { data: catalogResults, error: catalogError } = await query
-        .order('calories', { ascending: true })
-        .limit(20);
-
-      if (catalogError) throw catalogError;
-      const results = catalogResults || [];
-      console.log(`[mealsService.searchMealsAndFoods] Found ${results.length} results for query (q): "${searchTerm}"`, results);
-      return results;
+      console.log(
+        `[mealsService.searchMealsAndFoods] Returning ${unified.length} unified results for "${searchTerm}"`,
+        unified
+      );
+      return unified;
     } catch (err: any) {
-      console.error('Error searching meals and foods:', err);
+      console.error('[mealsService.searchMealsAndFoods] Error searching meals and foods:', err);
       return [];
     }
   },

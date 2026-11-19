@@ -167,7 +167,7 @@ export default function RegisterPage({
           <Pressable
             accessibilityRole="button"
             onPress={onGoBack}
-            style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}
+            style={({ pressed }: { pressed: boolean }) => [styles.backBtn, pressed && styles.pressed]}
           >
             <Icon name="arrowLeft" size={18} />
           </Pressable>
@@ -190,7 +190,7 @@ export default function RegisterPage({
           accessibilityRole="button"
           disabled={isGoogleLoading}
           onPress={handleGoogleSignUp}
-          style={({ pressed }) => [styles.googleBtn, pressed && styles.pressed]}
+          style={({ pressed }: { pressed: boolean }) => [styles.googleBtn, pressed && styles.pressed]}
         >
           {isGoogleLoading ? (
             <ActivityIndicator color={colors.ink} size="small" />
