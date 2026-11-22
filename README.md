@@ -87,6 +87,48 @@ git pull origin main
    node test-db.js
    ```
 
+### 5. Training and connecting the local food photo model
+
+The scanner can run a TensorFlow.js classifier in the browser first. A confident
+prediction is matched to the local food catalog for nutrition; low-confidence,
+unmatched, or unavailable model results continue to Gemini. The project does not
+include the labeled training photos or a trained model yet.
+
+1. To download the Malaysian cuisine starter set locally, run these commands
+   from the project root:
+   ```bash
+   pip install -r scripts/requirements-download-dataset.txt
+   python scripts/download_malaysian_dataset.py
+   ```
+   This puts images under `food_photos/`. The dataset currently lists only 10
+   images total, so use this to inspect the format, not to train a dependable
+   classifier. Add many more labeled photos first.
+2. **To train in Colab without storing photos on your laptop**, open
+   `scripts/colab_train_hf_food.ipynb` in Colab and run its cells. It reads the
+   Hugging Face dataset into Colab's temporary runtime and downloads only the
+   exported model. The notebook stops at a data-count check for the current
+   10-image dataset; collect more examples per dish and add them to your own
+   Hugging Face dataset first. Colab runtimes are temporary, so download the
+   model ZIP before disconnecting.
+3. Ensure model labels match foods in the nutrition catalog; unmatched labels
+   will fall back to Gemini at scan time.
+4. Put the exported `model.json`, weight shard file(s), and `labels.json` in
+   `Frontend/public/food-model/`.
+5. Restart `npm run dev` and scan some photos the model has never seen. Check
+   validation accuracy and test the confidence behavior with unfamiliar meals.
+
+For local-folder training, the alternative is to upload `food_photos/` to Colab,
+run `scripts/train_food_classifier.py`, and convert its Keras model with the
+`tensorflowjs_converter` command printed by the script.
+
+For training basics, follow TensorFlow's official
+[transfer learning tutorial](https://www.tensorflow.org/tutorials/images/transfer_learning).
+The initial classifier recognizes one dish per photo. It does not estimate
+portion size or identify multiple foods on a plate; those details still require
+Gemini or user correction. The local model needs no Gemini key for confident
+catalog matches. Keep the Gemini key for fallback scans, and avoid committing
+`.env` or training photos unless the team intends to share them.
+
 ---
 
 ## 🛠 Project Structure

@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Pressable, ActivityIndicator } from 'react-native-web';
 import { useApp, type CapturedMeal } from '../context/AppContext';
-import { Row, Txt, IconBox, Pill, c } from '../ui';
+import { Row, Txt, Pill, c } from '../ui';
+import { BackArrowIcon, FlipCameraIcon, GalleryFoodIcon, RetakeCameraIcon } from '../components/CameraIcons';
 import {
   analyzeFoodImage,
   testGeminiConnection,
@@ -29,6 +30,12 @@ const TAGS = [
   'Deep-fried',
   'Steamed / Soup',
 ];
+
+const FlashIcon = ({ color }: { color: string }) => (
+  <svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none">
+    <path d="m13.2 2.8-8 11h6l-.5 7.4 8.1-11h-6.1l.5-7.4Z" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
 
 const Corner = ({ style }: { style?: object }) => (
   <View
@@ -277,8 +284,7 @@ export default function ScanScreen({ onNavigate }: ScanScreenProps) {
       setDescription('');
       setSelectedTags([]);
 
-      // Auto-trigger AI scan right away for gallery uploads
-      void runRecognition(dataUrl, blob, { description: '', tags: [] });
+      // Keep gallery uploads in the frozen-photo review state until the user analyzes.
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Could not prepare that photo.';
       setScanError(message);
@@ -321,6 +327,8 @@ export default function ScanScreen({ onNavigate }: ScanScreenProps) {
     setCapturedImageUrl(null);
     setScanError(null);
     setProgress(0);
+    setDescription('');
+    setSelectedTags([]);
     if (videoRef.current && streamRef.current) {
       void videoRef.current.play().catch(() => undefined);
     }
@@ -370,14 +378,11 @@ export default function ScanScreen({ onNavigate }: ScanScreenProps) {
   };
 
   return (
-    <View
-      style={{
-        flex: 1,
-        backgroundColor: '#2d3748',
-        position: 'relative',
-        minHeight: '100vh',
-        overflowY: 'auto' as const,
-      }}
+    <div
+      className={capturedImageUrl
+        ? 'min-h-[100dvh] w-full overflow-y-auto overscroll-y-contain flex flex-col justify-between pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]'
+        : 'fixed inset-0 h-[100dvh] w-full overflow-hidden overscroll-none select-none flex flex-col justify-between pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]'}
+      style={{ backgroundColor: '#1E293B' }}
     >
       {/* Hidden file input for Photo Library / Gallery (no capture attribute so it opens the gallery/picker) */}
       <input
@@ -388,8 +393,24 @@ export default function ScanScreen({ onNavigate }: ScanScreenProps) {
         onChange={handleGalleryChange}
       />
 
-      <Row style={{ justifyContent: 'space-between', padding: 20, paddingTop: 40, alignItems: 'center' }}>
-        <IconBox label="✕" onPress={() => { stopStream(); onNavigate('Home'); }} />
+      <Row style={{ justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 8, alignItems: 'center', flexShrink: 0 }}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+          onPress={() => { stopStream(); onNavigate('Home'); }}
+          style={({ pressed }: { pressed: boolean }) => ({
+            width: 44,
+            height: 44,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: 'transparent',
+            transform: [{ scale: pressed ? 0.9 : 1 }],
+            filter: 'drop-shadow(0 1px 3px rgba(0, 0, 0, 0.7))',
+            cursor: 'pointer' as const,
+          })}
+        >
+          <BackArrowIcon />
+        </Pressable>
         <View style={{ alignItems: 'center', gap: 6 }}>
           <Pill bg={c.yellow}>AI Vision Meal Scanner</Pill>
           <Pressable
@@ -410,29 +431,44 @@ export default function ScanScreen({ onNavigate }: ScanScreenProps) {
             </Txt>
           </Pressable>
         </View>
-        <IconBox
-          label={flashOn ? '⚡' : 'flash'}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={flashOn ? 'Turn flashlight off' : 'Turn flashlight on'}
           onPress={() => {
             setFlashOn(!flashOn);
             showToast(flashOn ? 'Flash off' : 'Flash enabled');
           }}
-        />
+          style={({ pressed }: { pressed: boolean }) => ({
+            width: 44,
+            height: 44,
+            borderRadius: 12,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: flashOn ? '#FDE68A' : 'rgba(250, 248, 242, 0.14)',
+            borderWidth: 1.5,
+            borderColor: flashOn ? '#FDE68A' : 'rgba(250, 248, 242, 0.72)',
+            transform: [{ scale: pressed ? 0.94 : 1 }],
+            cursor: 'pointer' as const,
+          })}
+        >
+          <FlashIcon color={flashOn ? '#1E293B' : '#FAF8F2'} />
+        </Pressable>
       </Row>
 
-      <View
+      <div
+        className="touch-none relative flex w-full items-center justify-center overflow-hidden"
         style={{
-          height: 380,
+          height: capturedImageUrl ? 380 : undefined,
+          flex: capturedImageUrl ? '0 0 auto' : '1 1 0%',
+          minHeight: capturedImageUrl ? 220 : 160,
           width: '100%',
           maxWidth: 540,
           alignSelf: 'center',
-          marginVertical: 16,
-          position: 'relative',
+          marginTop: 8,
+          marginBottom: 8,
           borderRadius: 24,
-          overflow: 'hidden',
-          backgroundColor: '#1a202c',
-          justifyContent: 'center',
-          alignItems: 'center',
-          flexShrink: 0,
+          backgroundColor: '#18181B',
+          touchAction: 'none',
         }}
       >
         <video
@@ -447,7 +483,7 @@ export default function ScanScreen({ onNavigate }: ScanScreenProps) {
             width: '100%',
             height: '100%',
             objectFit: 'cover',
-            backgroundColor: '#1a202c',
+            backgroundColor: '#18181B',
             visibility: capturedImageUrl ? 'hidden' : 'visible',
           }}
         />
@@ -518,7 +554,7 @@ export default function ScanScreen({ onNavigate }: ScanScreenProps) {
             <ActivityIndicator color={c.yellow} size="small" style={{ marginTop: 14 }} />
           </View>
         )}
-      </View>
+      </div>
 
       {capturedImageUrl && !isProcessing && (
         <View
@@ -538,11 +574,24 @@ export default function ScanScreen({ onNavigate }: ScanScreenProps) {
             </Txt>
             <Pressable
               onPress={retake}
-              style={{ paddingVertical: 7, paddingHorizontal: 12, borderRadius: 10, backgroundColor: '#e2e8f0', cursor: 'pointer' as const }}
+              accessibilityRole="button"
+              accessibilityLabel="Retake photo"
+              style={({ pressed }: { pressed: boolean }) => ({
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 8,
+                paddingVertical: 7,
+                paddingHorizontal: 10,
+                borderRadius: 12,
+                backgroundColor: '#FAF8F2',
+                borderWidth: 1,
+                borderColor: '#D9D9D9',
+                transform: [{ scale: pressed ? 0.97 : 1 }],
+                cursor: 'pointer' as const,
+              })}
             >
-              <Txt s={13} w="700">
-                Retake
-              </Txt>
+              <RetakeCameraIcon frameColor="#1E293B" arrowColor="#F59E0B" />
+              <Txt s={13} w="700" color="#1E293B">Retake</Txt>
             </Pressable>
           </Row>
           <input
@@ -633,19 +682,31 @@ export default function ScanScreen({ onNavigate }: ScanScreenProps) {
             justifyContent: 'space-around',
             alignItems: 'center',
             paddingHorizontal: 36,
-            marginTop: 24,
-            marginBottom: 36,
+            marginTop: 8,
+            marginBottom: 8,
+            flexShrink: 0,
           }}
         >
           <Pressable
-            onPress={openGallery}
+            accessibilityRole="button"
+            accessibilityLabel="Flip camera"
+            onPress={() => {
+              if (!isProcessing) {
+                setCameraFacing((facing) => (facing === 'environment' ? 'user' : 'environment'));
+                showToast('Switched camera');
+              }
+            }}
             disabled={isProcessing}
-            style={{ alignItems: 'center', cursor: 'pointer' as const }}
+            style={({ pressed }: { pressed: boolean }) => ({
+              minWidth: 64,
+              alignItems: 'center',
+              opacity: isProcessing ? 0.55 : 1,
+              transform: [{ scale: pressed && !isProcessing ? 0.94 : 1 }],
+              cursor: 'pointer' as const,
+            })}
           >
-            <IconBox size={50} label="img" onPress={openGallery} />
-            <Txt s={11} color="#fff" style={{ marginTop: 4 }}>
-              Gallery
-            </Txt>
+            <FlipCameraIcon />
+            <Txt s={11} color="#FAF8F2" style={{ marginTop: 5 }}>Flip</Txt>
           </Pressable>
 
           <Pressable
@@ -657,11 +718,12 @@ export default function ScanScreen({ onNavigate }: ScanScreenProps) {
                 height: 80,
                 borderRadius: 40,
                 borderWidth: 4,
-                borderColor: '#fff',
+                borderColor: '#FAF8F2',
                 alignItems: 'center',
                 justifyContent: 'center',
                 cursor: 'pointer' as const,
                 transform: [{ scale: pressed ? 0.95 : 1 }],
+                flexShrink: 0,
               },
             ]}
           >
@@ -669,30 +731,23 @@ export default function ScanScreen({ onNavigate }: ScanScreenProps) {
           </Pressable>
 
           <Pressable
-            onPress={() => {
-              if (!isProcessing) {
-                setCameraFacing((facing) => (facing === 'environment' ? 'user' : 'environment'));
-                showToast('Switched camera');
-              }
-            }}
-            style={{ alignItems: 'center', cursor: 'pointer' as const }}
+            accessibilityRole="button"
+            accessibilityLabel="Open gallery"
+            onPress={openGallery}
+            disabled={isProcessing}
+            style={({ pressed }: { pressed: boolean }) => ({
+              minWidth: 64,
+              alignItems: 'center',
+              opacity: isProcessing ? 0.55 : 1,
+              transform: [{ scale: pressed && !isProcessing ? 0.94 : 1 }],
+              cursor: 'pointer' as const,
+            })}
           >
-            <IconBox
-              size={50}
-              label="flip"
-              onPress={() => {
-                if (!isProcessing) {
-                  setCameraFacing((facing) => (facing === 'environment' ? 'user' : 'environment'));
-                  showToast('Switched camera');
-                }
-              }}
-            />
-            <Txt s={11} color="#fff" style={{ marginTop: 4 }}>
-              Flip
-            </Txt>
+            <GalleryFoodIcon />
+            <Txt s={11} color="#FAF8F2" style={{ marginTop: 5 }}>Gallery</Txt>
           </Pressable>
         </Row>
       )}
-    </View>
+    </div>
   );
 }
