@@ -325,12 +325,15 @@ export async function testGeminiConnection(): Promise<{
     const elapsedMs = Math.round(performance.now() - startedAt);
     console.log(`[Vision] Response status: ${response.status} (Test Connection)`);
     if (!response.ok) {
-      let detail = '';
+      // Read the body exactly once: a Response body is a one-shot stream, so
+      // calling response.json() and then response.text() throws "Body is unusable".
+      const raw = await response.text();
+      let detail = raw;
       try {
-        const json = await response.json();
-        detail = json.error?.message || JSON.stringify(json);
+        const parsed = JSON.parse(raw) as { error?: { message?: string } };
+        detail = parsed?.error?.message || raw;
       } catch {
-        detail = await response.text();
+        /* body was not JSON (HTML error page, empty body) — keep the raw text */
       }
       console.log(`[Vision] Error: HTTP ${response.status} - ${detail}`);
       return {
