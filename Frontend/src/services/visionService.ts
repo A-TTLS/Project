@@ -1,3 +1,6 @@
+import * as tf from '@tensorflow/tfjs';
+import { loadLocalFoods, type LocalFood } from './localFoodSearch';
+
 export interface VisionFoodItem {
   name: string;
   portion_estimate: string;
@@ -23,6 +26,78 @@ const MODELS = [PRIMARY_MODEL, FALLBACK_MODEL];
 const API_ROOT = 'https://generativelanguage.googleapis.com/v1beta/models';
 const PLACEHOLDER_API_KEY = 'your_actual_google_gemini_api_key_here';
 const TIMEOUT_MS = 15_000;
+const LOCAL_MODEL_PATH = '/food-model/model.json';
+const LOCAL_LABELS_PATH = '/food-model/labels.json';
+const LOCAL_CONFIDENCE_THRESHOLD = 0.75;
+
+// The installed tfjs bundle's declaration files omit some browser runtime exports.
+// Keep that boundary typed loosely while preserving the app-facing result types.
+const tfRuntime = tf as any;
+let localModelPromise: Promise<any> | null = null;
+
+function normalizeFoodName(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+async function recognizeWithLocalModel(dataUrl: string): Promise<VisionRecognitionResult | null> {
+  try {
+    localModelPromise ??= tfRuntime.loadLayersModel(LOCAL_MODEL_PATH);
+    const model = await localModelPromise;
+    const labelResponse = await fetch(LOCAL_LABELS_PATH);
+    if (!labelResponse.ok) throw new Error('Food model labels are missing.');
+    const labels = (await labelResponse.json()) as string[];
+    if (!Array.isArray(labels) || !labels.length) throw new Error('Food model labels are invalid.');
+
+    const image = new Image();
+    image.src = dataUrl;
+    await image.decode();
+    const input = tfRuntime.tidy(() =>
+      tfRuntime.browser.fromPixels(image)
+        .resizeBilinear([224, 224])
+        .toFloat()
+        .div(127.5)
+        .sub(1)
+        .expandDims(0)
+    );
+    let probabilities: number[];
+    try {
+      const output = model.predict(input);
+      probabilities = Array.from(await output.data());
+      output.dispose();
+    } finally {
+      input.dispose();
+    }
+    const bestIndex = probabilities.indexOf(Math.max(...probabilities));
+    const confidence = probabilities[bestIndex] ?? 0;
+    const label = labels[bestIndex];
+    if (!label || confidence < LOCAL_CONFIDENCE_THRESHOLD) return null;
+
+    const foods = await loadLocalFoods();
+    const normalizedLabel = normalizeFoodName(label);
+    const food = foods.find((candidate: LocalFood) =>
+      normalizeFoodName(candidate.name) === normalizedLabel
+    );
+    if (!food) return null;
+
+    console.info(`[Vision] Local model recognized ${food.name} (${confidence.toFixed(2)}).`);
+    const item: VisionFoodItem = {
+      name: food.name,
+      portion_estimate: food.serving_size || '1 serving',
+      cooking_method: 'not specified',
+      sauce_or_gravy: 'not specified',
+      calories: food.calories,
+      protein_g: food.protein_g,
+      carbs_g: food.carbs_g,
+      fat_g: food.fat_g,
+    };
+    return { is_food: true, rejection_reason: null, meal_title: food.name, items: [item], total_calories: item.calories };
+  } catch (error) {
+    // The model is optional until a trained export is placed in public/food-model.
+    console.info('[Vision] Local model unavailable; trying Gemini.', error);
+    localModelPromise = null;
+    return null;
+  }
+}
 
 const PROMPT = `You are a food and drink recognition system. Inspect only the attached photograph.
 You must return a valid JSON object matching the following structure:
@@ -207,14 +282,17 @@ export async function analyzeFoodImage(
   base64Image: string,
   userContext: { description?: string; tags?: string[] } = {}
 ): Promise<VisionRecognitionResult> {
-  const apiKey = import.meta.env.VITE_GEMINI_API_KEY?.trim();
-  if (!apiKey || apiKey === PLACEHOLDER_API_KEY) {
-    throw new Error('Gemini API key is missing. Set VITE_GEMINI_API_KEY in Frontend/.env, then restart Vite.');
-  }
-
   const imageData = stripImageDataUrl(base64Image);
   if (!imageData || imageData.length < 100) {
     throw new Error('The captured photo was invalid or empty. Please retake it.');
+  }
+
+  const localResult = await recognizeWithLocalModel(base64Image);
+  if (localResult) return localResult;
+
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY?.trim();
+  if (!apiKey || apiKey === PLACEHOLDER_API_KEY) {
+    throw new Error('No confident local match was found and Gemini API key is missing. Set VITE_GEMINI_API_KEY in Frontend/.env.');
   }
 
   let lastError: Error | null = null;
@@ -364,3 +442,4 @@ export async function testGeminiConnection(): Promise<{
     window.clearTimeout(timeoutId);
   }
 }
+
