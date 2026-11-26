@@ -13,14 +13,28 @@ import SocialScreen from './screens/SocialScreen';
 import TrendScreen from './screens/TrendScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import RewardsScreen from './screens/RewardsScreen';
+import PasswordResetPage from './pages/PasswordResetPage';
 import { Txt, Row, c } from './ui';
 import type { ActivityLevel, UserMeasurements, UserProfile } from './services/authService';
-import { checkSupabaseHealth } from './services/supabaseClient';
+import { checkSupabaseHealth, supabase } from './services/supabaseClient';
+
+// Opened from a password-reset email? Read this before Supabase clears the
+// link's #...type=recovery part from the address bar.
+const OPENED_FROM_RESET_LINK =
+  typeof window !== 'undefined' && /type=recovery/.test(window.location.hash + window.location.search);
 
 function AppContent() {
-  const [currentScreen, setCurrentScreen] = useState('Home');
+  const [currentScreen, setCurrentScreen] = useState(OPENED_FROM_RESET_LINK ? 'Reset Password' : 'Home');
   const [dbStatus, setDbStatus] = useState<'checking' | 'connected' | 'offline'>('checking');
   const [showNavSwitcher, setShowNavSwitcher] = useState(true);
+
+  // A password-reset link signs the user in with a recovery session; show the new-password form.
+  useEffect(() => {
+    const { data } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') setCurrentScreen('Reset Password');
+    });
+    return () => data.subscription.unsubscribe();
+  }, []);
 
   // Check Supabase Backend Health on load
   useEffect(() => {
@@ -52,7 +66,7 @@ function AppContent() {
       return;
     }
 
-    if (!hasAutoRedirected.current && hasCompletedOnboarding === false) {
+    if (!hasAutoRedirected.current && hasCompletedOnboarding === false && !OPENED_FROM_RESET_LINK) {
       hasAutoRedirected.current = true;
       console.log('[CalorieSnap Auth] First-time login detected without biometrics — routing to Profile Setup');
       setCurrentScreen('Profile Setup');
@@ -123,12 +137,32 @@ function AppContent() {
           <LoginPage
             onGoBack={() => setCurrentScreen('Landing Page')}
             onGoToRegister={() => setCurrentScreen('Register')}
+            onForgotPassword={() => setCurrentScreen('Forgot Password')}
             onSignedIn={() => {
               if (hasCompletedOnboarding === false) {
                 setCurrentScreen('Profile Setup');
               } else {
                 setCurrentScreen('Home');
               }
+            }}
+          />
+        );
+      case 'Forgot Password':
+        return (
+          <PasswordResetPage
+            mode="request"
+            onGoBack={() => setCurrentScreen('Login')}
+            onDone={() => setCurrentScreen('Home')}
+          />
+        );
+      case 'Reset Password':
+        return (
+          <PasswordResetPage
+            mode="update"
+            onGoBack={() => setCurrentScreen('Login')}
+            onDone={async () => {
+              await reloadUserData();
+              setCurrentScreen('Home');
             }}
           />
         );
