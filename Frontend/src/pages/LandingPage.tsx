@@ -16,6 +16,7 @@ interface LandingPageProps {
 export default function LandingPage({ onNavigate }: LandingPageProps) {
   const { width } = useWindowDimensions();
   const isWide = width >= 860;
+  const isCompact = width < 460;
 
   const features = [
     {
@@ -50,7 +51,7 @@ export default function LandingPage({ onNavigate }: LandingPageProps) {
       <Navbar currentPage="landing" onNavigate={onNavigate} />
 
       {/* Hero Section */}
-      <View style={styles.heroWrapper}>
+      <View style={[styles.heroWrapper, isCompact && { paddingHorizontal: 16, paddingVertical: 28 }]}>
         <View style={[styles.heroContent, isWide && styles.heroContentWide]}>
           {/* Left Text Column */}
           <View style={[styles.heroTextCol, isWide && styles.heroTextColWide]}>
@@ -59,7 +60,7 @@ export default function LandingPage({ onNavigate }: LandingPageProps) {
               <Text style={styles.pillText}>AI-Powered Nutrition Tracking</Text>
             </View>
 
-            <Text style={styles.heroHeading}>
+            <Text style={[styles.heroHeading, isCompact && { fontSize: 32, lineHeight: 38 }]}>
               Snap your meal.{"\n"}Share the streak.
             </Text>
 
@@ -218,8 +219,9 @@ const styles = StyleSheet.create({
   },
   ctaRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
     alignItems: "center",
-    gap: 14,
+    gap: 12,
     paddingTop: 8,
   },
   primaryCta: {
@@ -255,9 +257,10 @@ const styles = StyleSheet.create({
   },
   statsRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
     alignItems: "center",
-    gap: 16,
-    paddingTop: 24,
+    gap: 14,
+    paddingTop: 20,
     borderTopWidth: 1,
     borderTopColor: colors.border,
   },

@@ -25,6 +25,7 @@ export default function RegisterPage({
 }: RegisterPageProps) {
   const { width } = useWindowDimensions();
   const isWide = width >= 640;
+  const isCompact = width < 440;
   const { setCurrentUser, reloadUserData } = useApp();
 
   // Clean, empty initial inputs so real users can fill in their details
@@ -160,8 +161,8 @@ export default function RegisterPage({
   );
 
   return (
-    <View style={styles.screen}>
-      <View style={[styles.card, isWide && styles.cardWide]}>
+    <View style={[styles.screen, isCompact && { padding: 12 }]}>
+      <View style={[styles.card, isWide && styles.cardWide, isCompact && { padding: 20, borderRadius: 22 }]}>
         {/* Header */}
         <View style={styles.header}>
           <Pressable
@@ -445,6 +446,7 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
+    minWidth: 1,
     fontSize: 14,
     color: colors.ink,
     outlineStyle: "none" as unknown as undefined,
@@ -489,6 +491,7 @@ const styles = StyleSheet.create({
   },
   switchRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
     alignItems: "center",
     justifyContent: "center",
     gap: 6,

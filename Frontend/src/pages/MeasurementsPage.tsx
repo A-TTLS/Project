@@ -270,8 +270,10 @@ const styles = StyleSheet.create({
   },
   unitsRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
     alignItems: "center",
     justifyContent: "space-between",
+    gap: 10,
   },
   unitsLabel: {
     fontSize: 13,
@@ -358,6 +360,7 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
+    minWidth: 1,
     fontSize: 14,
     color: colors.ink,
     outlineStyle: "none" as unknown as undefined,

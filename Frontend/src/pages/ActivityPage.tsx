@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native-web";
 import { authService, type ActivityLevel, type UserMeasurements } from "../services/authService";
+import { calculateNutritionTargets } from "../services/nutritionService";
 import { useApp } from "../context/AppContext";
 import {
   ActionButton,
@@ -29,8 +30,8 @@ const levels: LevelOption[] = [
 ];
 
 /**
- * Mifflin-St Jeor formula calculating resting basal metabolic rate (BMR)
- * multiplied by physical activity level (PAL).
+ * Mifflin-St Jeor BMR * Physical Activity Level (PAL) with RiceCal's tapered
+ * weight-goal pace (0.5 kg/wk loss / 0.25 kg/wk gain, 0.5 kg deadband, sex floors).
  */
 export function estimateTarget(m: UserMeasurements, level: ActivityLevel) {
   const imperial = m.units === "imperial";
@@ -43,27 +44,20 @@ export function estimateTarget(m: UserMeasurements, level: ActivityLevel) {
   const targetKg = targetVal / (imperial ? 2.20462 : 1);
   const cm = heightVal / (imperial ? 0.393701 : 1);
 
-  const offset = m.gender === "Male" ? 5 : m.gender === "Female" ? -161 : -78;
-  const bmr = 10 * kg + 6.25 * cm - 5 * ageVal + offset;
-  const factor = levels.find((l) => l.id === level)?.factor || 1.375;
-
-  // Small caloric deficit or surplus based on target goal
-  const adjust = targetKg < kg ? -250 : targetKg > kg ? 250 : 0;
-  const rawTargetKcal = Math.max(1200, Math.round((bmr * factor + adjust) / 10) * 10);
-
-  // Balanced macro distribution:
-  // Protein (25% kcal, 4 kcal/g), Fat (25% kcal, 9 kcal/g), Carbs (50% remaining kcal, 4 kcal/g)
-  const protein = Math.max(45, Math.round((rawTargetKcal * 0.25) / 4));
-  const fat = Math.max(30, Math.round((rawTargetKcal * 0.25) / 9));
-  const carbs = Math.max(50, Math.round((rawTargetKcal - (protein * 4 + fat * 9)) / 4));
-  // Ensure total calories precisely match Protein * 4 + Carbs * 4 + Fat * 9
-  const kcal = protein * 4 + carbs * 4 + fat * 9;
+  const res = calculateNutritionTargets({
+    gender: m.gender || "Other",
+    age: ageVal,
+    weightKg: kg,
+    heightCm: cm,
+    activityLevel: level,
+    targetWeightKg: targetKg,
+  });
 
   return {
-    kcal,
-    carbs,
-    protein,
-    fat,
+    kcal: res.dailyCalories,
+    carbs: res.carbsGrams,
+    protein: res.proteinGrams,
+    fat: res.fatGrams,
   };
 }
 
@@ -227,6 +221,7 @@ const styles = StyleSheet.create({
   },
   levelCopy: {
     flex: 1,
+    minWidth: 1,
     gap: 2,
   },
   levelTitle: {
@@ -292,7 +287,9 @@ const styles = StyleSheet.create({
   },
   macroRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
     justifyContent: "space-around",
+    gap: 10,
     paddingVertical: 4,
   },
   macroItem: {

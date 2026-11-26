@@ -9,20 +9,21 @@ interface NavbarProps {
 export default function Navbar({ currentPage, onNavigate }: NavbarProps) {
   const { width } = useWindowDimensions();
   const isWide = width >= 768;
+  const isCompact = width < 440;
 
   return (
-    <View style={styles.navContainer}>
+    <View style={[styles.navContainer, isCompact && { paddingHorizontal: 14, paddingVertical: 12 }]}>
       <View style={styles.navContent}>
         {/* Brand Logo & Name */}
         <Pressable
           accessibilityRole="button"
           onPress={() => onNavigate("landing")}
-          style={styles.brand}
+          style={[styles.brand, isCompact && { gap: 8 }]}
         >
-          <View style={styles.brandSymbol}>
-            <Icon name="scan" size={20} />
+          <View style={[styles.brandSymbol, isCompact && { width: 32, height: 32, borderRadius: 10 }]}>
+            <Icon name="scan" size={isCompact ? 17 : 20} />
           </View>
-          <Text style={styles.brandName}>CalorieSnap</Text>
+          <Text style={[styles.brandName, isCompact && { fontSize: 17 }]}>CalorieSnap</Text>
         </Pressable>
 
         {/* Center Navigation Links (Wide Screen) */}
@@ -54,17 +55,18 @@ export default function Navbar({ currentPage, onNavigate }: NavbarProps) {
         )}
 
         {/* Auth CTA Buttons */}
-        <View style={styles.authButtons}>
+        <View style={[styles.authButtons, isCompact && { gap: 6 }]}>
           <Pressable
             accessibilityRole="button"
             onPress={() => onNavigate("login")}
             style={({ pressed }: { pressed: boolean }) => [
               styles.signInBtn,
+              isCompact && { paddingVertical: 7, paddingHorizontal: 11 },
               currentPage === "login" && styles.btnSelected,
               pressed && styles.pressed,
             ]}
           >
-            <Text style={styles.signInText}>Sign In</Text>
+            <Text style={[styles.signInText, isCompact && { fontSize: 12 }]}>Sign In</Text>
           </Pressable>
 
           <Pressable
@@ -72,11 +74,12 @@ export default function Navbar({ currentPage, onNavigate }: NavbarProps) {
             onPress={() => onNavigate("register")}
             style={({ pressed }: { pressed: boolean }) => [
               styles.getStartedBtn,
+              isCompact && { paddingVertical: 7, paddingHorizontal: 12 },
               currentPage === "register" && styles.btnSelected,
               pressed && styles.pressed,
             ]}
           >
-            <Text style={styles.getStartedText}>Get Started</Text>
+            <Text style={[styles.getStartedText, isCompact && { fontSize: 12 }]}>Get Started</Text>
           </Pressable>
         </View>
       </View>
