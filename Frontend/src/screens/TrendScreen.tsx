@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { View, Pressable } from 'react-native-web';
 import { useApp } from '../context/AppContext';
+import CalorieIntakeChart from '../components/CalorieIntakeChart';
+import { WeightTrendCard } from '../components/WeightTrendCard';
 
 
 import {
