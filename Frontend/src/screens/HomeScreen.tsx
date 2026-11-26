@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Pressable, TextInput, ScrollView, Image } from 'react-native-web';
-import { useApp } from '../context/AppContext';
+import { useApp, WeightLogItem } from '../context/AppContext';
 import { loadLocalFoods, searchLocalFoods, LocalFood } from '../services/localFoodSearch';
 import {
   Screen,
@@ -12,7 +12,6 @@ import {
   IconBox,
   SectionHead,
   Btn,
-  Ring,
   TwoToneCalorieRing,
   Icon,
   c,
@@ -28,8 +27,7 @@ interface HomeScreenProps {
  */
 function getMealEmoji(name: string, category: string): string {
   const n = (name || '').toLowerCase();
-  
-  // Specific food items
+
   if (n.includes('pizza')) return '🍕';
   if (n.includes('burger')) return '🍔';
   if (n.includes('nasi') || n.includes('rice') || n.includes('biryani')) return '🍛';
@@ -52,7 +50,6 @@ function getMealEmoji(name: string, category: string): string {
   if (n.includes('sushi')) return '🍣';
   if (n.includes('taco') || n.includes('burrito')) return '🌮';
 
-  // Category fallback
   switch (category) {
     case 'Breakfast': return '🍳';
     case 'Lunch': return '🍱';
@@ -62,7 +59,44 @@ function getMealEmoji(name: string, category: string): string {
   }
 }
 
+/**
+ * Builds an SVG sparkline path purely from real logged weight entries
+ */
+function buildRealWeightSparkline(logs: WeightLogItem[], width = 120, height = 40): string {
+  const values = logs
+    .map((entry) => Number(entry.weightKg))
+    .filter((v) => Number.isFinite(v) && v > 0);
+
+  if (values.length < 2) {
+    const midY = height / 2;
+    return `M 4 ${midY} L ${width - 4} ${midY}`;
+  }
+
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const padX = 4;
+  const padY = 6;
+  const usableW = width - padX * 2;
+  const usableH = height - padY * 2;
+
+  const pts = values.map((val, idx) => {
+    const x = padX + (idx / (values.length - 1)) * usableW;
+    // Lower weight = lower on screen (higher y), higher weight = higher on screen (lower y)
+    const norm = max === min ? 0.5 : (max - val) / (max - min);
+    const y = padY + norm * usableH;
+    return { x, y };
+  });
+
+  return pts.reduce((acc, pt, i, arr) => {
+    if (i === 0) return `M ${pt.x.toFixed(1)} ${pt.y.toFixed(1)}`;
+    const prev = arr[i - 1];
+    const cx = ((prev.x + pt.x) / 2).toFixed(1);
+    return `${acc} C ${cx} ${prev.y.toFixed(1)}, ${cx} ${pt.y.toFixed(1)}, ${pt.x.toFixed(1)} ${pt.y.toFixed(1)}`;
+  }, '');
+}
+
 export default function HomeScreen({ onNavigate }: HomeScreenProps) {
+  const appContext = useApp() as any;
   const {
     userName,
     streakDays,
@@ -76,32 +110,84 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
     proteinGrams,
     carbsGrams,
     fatsGrams,
+    currentWeight,
+    targetWeight,
+    weightHistory = [],
     waterMl,
     stepsCount,
     workoutMins,
     todayMeals,
     addWater,
+    logWeight,
     logMeal,
     deleteMeal,
     setEditingMeal,
     setCapturedMeal,
     showToast,
-  } = useApp();
+  } = appContext;
 
-  // Water undo — remembers the last quick-add amount so undo subtracts it.
-  // Undo stays pressable as long as there is any water logged today (waterMl > 0).
+  const logWorkoutFn: ((mins: number, kcal: number, label?: string) => Promise<void> | void) | undefined =
+    appContext.logWorkout;
+
   const [lastWaterAdded, setLastWaterAdded] = useState<number>(250);
+  const [localWorkoutMins, setLocalWorkoutMins] = useState<number>(0);
+  const [localBurnedKcal, setLocalBurnedKcal] = useState<number>(0);
+  const [workoutLabel, setWorkoutLabel] = useState<string>('Afternoon strength');
+
+  // Quick Weight Modal State
+  const [showWeightModal, setShowWeightModal] = useState(false);
+  const [weightInputKg, setWeightInputKg] = useState('');
+  const [weightInputNote, setWeightInputNote] = useState('');
+
+  // Quick Workout Modal State
+  const [showWorkoutModal, setShowWorkoutModal] = useState(false);
+  const [workoutInputMins, setWorkoutInputMins] = useState('30');
+  const [workoutInputKcal, setWorkoutInputKcal] = useState('210');
+  const [workoutInputLabel, setWorkoutInputLabel] = useState('Afternoon strength');
 
   const handleAddWater = (amount: number) => {
-    setLastWaterAdded(amount);   // remember which button was pressed last
+    setLastWaterAdded(amount);
     addWater(amount);
   };
 
-  const handleUndoWater = () => {
-    if (waterMl > 0) {
-      // Subtract the last-used amount, but never go below 0
-      addWater(-Math.min(lastWaterAdded, waterMl));
+  const handleOpenWeightModal = () => {
+    setWeightInputKg(currentWeight ? Number(currentWeight).toFixed(1) : '');
+    setWeightInputNote('');
+    setShowWeightModal(true);
+  };
+
+  const handleSaveWeight = async () => {
+    const parsed = parseFloat(weightInputKg);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      showToast('⚠️ Please enter a valid weight in kg');
+      return;
     }
+    if (logWeight) {
+      await logWeight(parsed, weightInputNote);
+    }
+    setShowWeightModal(false);
+  };
+
+  const handleSaveWorkout = async () => {
+    const mins = Math.max(0, parseInt(workoutInputMins, 10) || 0);
+    const kcal = Math.max(0, parseInt(workoutInputKcal, 10) || 0);
+    const label = workoutInputLabel.trim() || 'Campus workout';
+
+    if (mins <= 0 && kcal <= 0) {
+      showToast('⚠️ Enter workout minutes or calories burned');
+      return;
+    }
+
+    setWorkoutLabel(label);
+    if (logWorkoutFn) {
+      await logWorkoutFn(mins, kcal, label);
+    } else {
+      setLocalWorkoutMins((m) => m + mins);
+      setLocalBurnedKcal((k) => k + kcal);
+      showToast(`💪 Logged ${mins}m (${kcal} kcal burned)`);
+    }
+
+    setShowWorkoutModal(false);
   };
 
   // Quick Add Meal Modal State
@@ -120,20 +206,16 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
   const [foodDatasetError, setFoodDatasetError] = useState<string | null>(null);
   const [showSuggestions, setShowSuggestions] = useState(false);
 
-  // Mount effect: Fetch optimized food dataset
   useEffect(() => {
-    console.log('[HomeScreen] Component mounted. Attempting to fetch dataset from /datasets/optimized_foods.json (or .csv)...');
     setIsLoadingFoods(true);
     setFoodDatasetError(null);
 
     loadLocalFoods()
       .then((foods) => {
-        console.log(`[HomeScreen] Dataset successfully loaded! Total items in memory: ${foods.length}`);
         setLocalFoods(foods);
         setIsLoadingFoods(false);
       })
       .catch((err) => {
-        console.error('[HomeScreen] Failed to fetch or parse food dataset:', err);
         setFoodDatasetError(err.message || 'Dataset file not found or failed to parse');
         setIsLoadingFoods(false);
       });
@@ -141,21 +223,17 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
 
   const handleMealNameChange = (text: string) => {
     setMealName(text);
-
     if (!text.trim()) {
       setFoodSuggestions([]);
       setShowSuggestions(false);
       return;
     }
-
     const filtered = searchLocalFoods(localFoods, text);
-    console.log(`[HomeScreen search] User query (q): "${text}" | Filtered results count: ${filtered.length}`, filtered);
     setFoodSuggestions(filtered);
     setShowSuggestions(true);
   };
 
   const handleSelectFood = (food: LocalFood) => {
-    console.log('[HomeScreen] Selected food from suggestions:', food);
     setMealName(food.name);
     setMealKcal(food.calories.toString());
     setMealProtein(food.protein_g.toString());
@@ -164,13 +242,39 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
     setShowSuggestions(false);
   };
 
+  const displayWorkoutMins = (Number(workoutMins) || 0) + localWorkoutMins;
+  const displayBurnedKcal = (Number(burnedKcal) || 0) + localBurnedKcal;
+
   const safeGoal = Math.max(1, Number(calorieGoal) || 2000);
   const safeConsumed = Math.max(0, Number(consumedKcal) || 0);
-  const safeBurned = Math.max(0, Number(burnedKcal) || 0);
+  const safeBurned = Math.max(0, displayBurnedKcal);
   const remainingKcal = Math.max(0, Math.round(safeGoal - safeConsumed + safeBurned));
   const progressPct = Math.min(100, Math.round((safeConsumed / safeGoal) * 100));
 
-  // Today formatted date
+  const safeCurrentWeight = Number(currentWeight) || 0;
+  const safeTargetWeight = Number(targetWeight) || 0;
+  const realWeightSeries: WeightLogItem[] =
+    Array.isArray(weightHistory) && weightHistory.length > 0
+      ? weightHistory
+      : safeCurrentWeight > 0
+      ? [{ id: 'current-only', weightKg: safeCurrentWeight, recordedAt: new Date().toISOString() }]
+      : [];
+  const weightSparkPath = buildRealWeightSparkline(realWeightSeries);
+
+  const waterGoalMl = 2000;
+  const waterSegments = 8;
+  const filledWaterSegments = Math.min(
+    waterSegments,
+    Math.max(0, Math.floor((Number(waterMl) || 0) / (waterGoalMl / waterSegments)))
+  );
+
+  const safeSteps = Math.max(0, Number(stepsCount) || 0);
+  const stepsGoal = 10000;
+  const stepsRatio = Math.min(1, safeSteps / stepsGoal);
+  const ringRadius = 22;
+  const ringCircumference = 2 * Math.PI * ringRadius;
+  const ringDashOffset = ringCircumference * (1 - stepsRatio);
+
   const todayFormatted = new Date().toLocaleDateString('en-GB', {
     weekday: 'long',
     day: 'numeric',
@@ -187,7 +291,7 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
       name: mealName.trim(),
       category: mealCategory,
       meta: `${mealCategory} · Logged`,
-      kcal: parseInt(mealKcal) || 0,
+      kcal: parseInt(mealKcal, 10) || 0,
       protein: parseFloat(mealProtein) || 0,
       carbs: parseFloat(mealCarbs) || 0,
       fat: parseFloat(mealFat) || 0,
@@ -202,7 +306,11 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
   };
 
   return (
-    <Screen tab="Home" onSelectTab={onNavigate} hideTabBar={showAddMealModal}>
+    <Screen
+      tab="Home"
+      onSelectTab={onNavigate}
+      hideTabBar={showAddMealModal || showWorkoutModal || showWeightModal}
+    >
       {/* Top Header */}
       <Row style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
         <Row style={{ alignItems: 'center' }}>
@@ -264,7 +372,6 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
           </Pressable>
         </Row>
 
-        {/* Center Ring Display - Two-Tone Daily Calorie Ring */}
         <View style={{ marginVertical: 20, alignItems: 'center', justifyContent: 'center' }}>
           <TwoToneCalorieRing
             size={190}
@@ -286,7 +393,6 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
           </TwoToneCalorieRing>
         </View>
 
-        {/* Consumed vs Burned vs Remaining */}
         <Row style={{ alignSelf: 'stretch', justifyContent: 'space-around', paddingTop: 14, borderTopWidth: 1, borderColor: '#C4E4F3' }}>
           <View style={{ alignItems: 'center' }}>
             <Txt s={11} color="#527D93">Consumed</Txt>
@@ -306,14 +412,13 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
       </Card>
 
       {/* Macronutrient Breakdown */}
-      <Card style={{ marginBottom: 16 }}>
+      <Card style={{ marginBottom: 18 }}>
         <Row style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
           <Txt w="800">Macronutrients Today</Txt>
           <Txt s={11} color={c.mute}>Target Balance</Txt>
         </Row>
 
         <View style={{ gap: 12 }}>
-          {/* Protein */}
           <View>
             <Row style={{ justifyContent: 'space-between', marginBottom: 4 }}>
               <Row style={{ gap: 6 }}>
@@ -323,11 +428,10 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
               <Txt s={12} w="700">{proteinGrams}g <Txt s={11} color={c.mute}>/ {proteinGoal}g</Txt></Txt>
             </Row>
             <View style={{ width: '100%', height: 8, borderRadius: 4, backgroundColor: '#f1f5f9', overflow: 'hidden' }}>
-              <View style={{ width: `${Math.min(100, (proteinGrams / proteinGoal) * 100)}%`, height: '100%', backgroundColor: '#3E6B52', borderRadius: 4 }} />
+              <View style={{ width: `${Math.min(100, (proteinGrams / Math.max(1, proteinGoal)) * 100)}%`, height: '100%', backgroundColor: '#3E6B52', borderRadius: 4 }} />
             </View>
           </View>
 
-          {/* Carbs */}
           <View>
             <Row style={{ justifyContent: 'space-between', marginBottom: 4 }}>
               <Row style={{ gap: 6 }}>
@@ -337,11 +441,10 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
               <Txt s={12} w="700">{carbsGrams}g <Txt s={11} color={c.mute}>/ {carbsGoal}g</Txt></Txt>
             </Row>
             <View style={{ width: '100%', height: 8, borderRadius: 4, backgroundColor: '#f1f5f9', overflow: 'hidden' }}>
-              <View style={{ width: `${Math.min(100, (carbsGrams / carbsGoal) * 100)}%`, height: '100%', backgroundColor: '#EAB308', borderRadius: 4 }} />
+              <View style={{ width: `${Math.min(100, (carbsGrams / Math.max(1, carbsGoal)) * 100)}%`, height: '100%', backgroundColor: '#EAB308', borderRadius: 4 }} />
             </View>
           </View>
 
-          {/* Fat */}
           <View>
             <Row style={{ justifyContent: 'space-between', marginBottom: 4 }}>
               <Row style={{ gap: 6 }}>
@@ -351,79 +454,232 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
               <Txt s={12} w="700">{fatsGrams}g <Txt s={11} color={c.mute}>/ {fatGoal}g</Txt></Txt>
             </Row>
             <View style={{ width: '100%', height: 8, borderRadius: 4, backgroundColor: '#f1f5f9', overflow: 'hidden' }}>
-              <View style={{ width: `${Math.min(100, (fatsGrams / fatGoal) * 100)}%`, height: '100%', backgroundColor: '#EF4444', borderRadius: 4 }} />
+              <View style={{ width: `${Math.min(100, (fatsGrams / Math.max(1, fatGoal)) * 100)}%`, height: '100%', backgroundColor: '#EF4444', borderRadius: 4 }} />
             </View>
           </View>
         </View>
       </Card>
 
-      {/* Hydration & Daily Activity Cards */}
-      <Row style={{ gap: 12, marginBottom: 16 }}>
-        {/* Water Tracker */}
-        <Card style={{ flex: 1, padding: 14 }}>
-          <Row style={{ justifyContent: 'space-between', alignItems: 'center' }}>
-            <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: '#E0F2FE', alignItems: 'center', justifyContent: 'center' }}>
-              <Icon name="water" size={16} color="#0284C7" />
+      {/* A Little Everyday Balance (2x2 Grid: Weight, Water, Steps, Workout) */}
+      <View style={{ marginBottom: 18 }}>
+        <Txt s={18} w="800" color="#1E293B" style={{ marginBottom: 12 }}>
+          A little everyday balance
+        </Txt>
+
+        {/* Row 1: Weight + Water */}
+        <Row style={{ gap: 12, marginBottom: 12, alignItems: 'stretch' }}>
+          {/* 1. Weight Card (Tap to log real weight into Supabase weight_logs) */}
+          <Pressable
+            accessibilityLabel="Log weight"
+            onPress={handleOpenWeightModal}
+            style={{
+              flex: 1,
+              backgroundColor: '#FFFFFF',
+              borderRadius: 24,
+              padding: 16,
+              borderWidth: 1,
+              borderColor: '#F1F5F9',
+              boxShadow: '0 6px 20px rgba(15, 23, 42, 0.04)',
+              justifyContent: 'space-between',
+              minHeight: 205,
+            }}
+          >
+            <Row style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+              <Txt s={13} w="600" color="#64748B">Weight</Txt>
+              <Txt s={14} color="#334155">⚖️</Txt>
+            </Row>
+
+            <View style={{ marginVertical: 6 }}>
+              <Row style={{ alignItems: 'baseline', gap: 4 }}>
+                <Txt s={30} w="800" color="#0F172A">
+                  {safeCurrentWeight > 0 ? safeCurrentWeight.toFixed(1) : '--'}
+                </Txt>
+                <Txt s={13} w="500" color="#64748B">kg</Txt>
+              </Row>
+
+              <svg
+                viewBox="0 0 120 40"
+                style={{ width: '100%', height: 40, marginTop: 8, overflow: 'visible' }}
+                aria-label="Real weight history sparkline"
+              >
+                <path
+                  d={weightSparkPath}
+                  fill="none"
+                  stroke="#4D7C43"
+                  strokeWidth="2.6"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
             </View>
-            <Txt s={11} color={c.mute}>Goal 2,000ml</Txt>
-          </Row>
 
-          <Txt s={20} w="800" style={{ marginTop: 8 }}>{waterMl.toLocaleString()} <Txt s={11} color={c.mute}>ml</Txt></Txt>
-          <Txt s={11} color="#0284C7" style={{ marginBottom: 10 }}>
-            {Math.round((waterMl / 2000) * 100)}% Hydrated
-          </Txt>
+            <Txt s={11} w="500" color="#64748B">
+              {safeTargetWeight > 0 ? `Target ${safeTargetWeight.toFixed(1)} kg` : 'Tap to log weight'}
+            </Txt>
+          </Pressable>
 
-          <Row style={{ gap: 6, flexWrap: 'wrap' }}>
+          {/* 2. Water Card */}
+          <View
+            style={{
+              flex: 1,
+              backgroundColor: '#DDF2FC',
+              borderRadius: 24,
+              padding: 16,
+              justifyContent: 'space-between',
+              minHeight: 205,
+            }}
+          >
+            <Row style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+              <Txt s={13} w="600" color="#334155">Water</Txt>
+              <Icon name="water" size={16} color="#1E293B" />
+            </Row>
+
+            <View style={{ marginVertical: 4 }}>
+              <Txt s={28} w="800" color="#0F172A">
+                {(Number(waterMl) || 0).toLocaleString()}
+              </Txt>
+              <Txt s={11} w="500" color="#475569" style={{ marginBottom: 10 }}>
+                / {waterGoalMl.toLocaleString()} ml
+              </Txt>
+
+              <Row style={{ gap: 3, alignItems: 'center', justifyContent: 'space-between' }}>
+                {Array.from({ length: waterSegments }).map((_, idx) => (
+                  <View
+                    key={idx}
+                    style={{
+                      flex: 1,
+                      height: 22,
+                      borderRadius: 999,
+                      backgroundColor: idx < filledWaterSegments ? '#2B5B78' : 'rgba(255,255,255,0.85)',
+                    }}
+                  />
+                ))}
+              </Row>
+            </View>
+
             <Pressable
               onPress={() => handleAddWater(250)}
-              style={{ flex: 1, paddingVertical: 6, borderRadius: 8, backgroundColor: '#E0F2FE', alignItems: 'center' }}
+              style={{
+                backgroundColor: '#FFFFFF',
+                borderRadius: 999,
+                paddingVertical: 8,
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 2px 6px rgba(15, 23, 42, 0.05)',
+              }}
             >
-              <Txt s={11} w="700" color="#0369A1">+250ml</Txt>
+              <Txt s={12} w="800" color="#0F172A">+250ml</Txt>
             </Pressable>
-            <Pressable
-              onPress={() => handleAddWater(500)}
-              style={{ flex: 1, paddingVertical: 6, borderRadius: 8, backgroundColor: '#BAE6FD', alignItems: 'center' }}
-            >
-              <Txt s={11} w="700" color="#0369A1">+500ml</Txt>
-            </Pressable>
-            <Pressable
-              onPress={() => handleAddWater(1000)}
-              style={{ flex: 1, paddingVertical: 6, borderRadius: 8, backgroundColor: '#7DD3FC', alignItems: 'center' }}
-            >
-              <Txt s={11} w="700" color="#0C4A6E">+1L</Txt>
-            </Pressable>
-            <Pressable
-              onPress={handleUndoWater}
-              disabled={waterMl === 0}
-              style={{ paddingHorizontal: 8, paddingVertical: 6, borderRadius: 8, backgroundColor: waterMl > 0 ? '#FEF3C7' : c.bg, alignItems: 'center' }}
-            >
-              <Txt s={11} color={waterMl > 0 ? '#92400E' : c.mute}>↩</Txt>
-            </Pressable>
-          </Row>
-        </Card>
+          </View>
+        </Row>
 
-        {/* Steps & Movement */}
-        <Card style={{ flex: 1, padding: 14 }}>
-          <Row style={{ justifyContent: 'space-between', alignItems: 'center' }}>
-            <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: '#DCFCE7', alignItems: 'center', justifyContent: 'center' }}>
-              <Icon name="footprints" size={16} color="#15803D" />
-            </View>
-            <Txt s={11} color={c.mute}>Goal 8,000</Txt>
-          </Row>
-
-          <Txt s={20} w="800" style={{ marginTop: 8 }}>{stepsCount.toLocaleString()} <Txt s={11} color={c.mute}>steps</Txt></Txt>
-          <Txt s={11} color="#15803D" style={{ marginBottom: 10 }}>
-            {workoutMins}m gym · {burnedKcal} kcal
-          </Txt>
-
+        {/* Row 2: Steps + Workout */}
+        <Row style={{ gap: 12, alignItems: 'stretch' }}>
+          {/* 3. Steps Card */}
           <Pressable
             onPress={() => onNavigate('Trend')}
-            style={{ width: '100%', paddingVertical: 6, borderRadius: 8, backgroundColor: c.bg, alignItems: 'center' }}
+            style={{
+              flex: 1,
+              backgroundColor: '#DCF3D4',
+              borderRadius: 24,
+              padding: 16,
+              justifyContent: 'space-between',
+              minHeight: 200,
+            }}
           >
-            <Txt s={11} w="600" color={c.ink}>View Activity ›</Txt>
+            <Row style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+              <Txt s={13} w="600" color="#2D4729">Steps</Txt>
+              <Icon name="footprints" size={16} color="#2D4729" />
+            </Row>
+
+            <Row style={{ alignItems: 'center', gap: 10, marginVertical: 8 }}>
+              <svg width="52" height="52" viewBox="0 0 56 56" style={{ transform: 'rotate(-90deg)', flexShrink: 0 }}>
+                <circle
+                  cx="28"
+                  cy="28"
+                  r={ringRadius}
+                  fill="none"
+                  stroke="#B6DFAB"
+                  strokeWidth="5"
+                />
+                <circle
+                  cx="28"
+                  cy="28"
+                  r={ringRadius}
+                  fill="none"
+                  stroke="#436F3B"
+                  strokeWidth="5"
+                  strokeLinecap="round"
+                  strokeDasharray={ringCircumference}
+                  strokeDashoffset={ringDashOffset}
+                />
+              </svg>
+
+              <Txt s={24} w="800" color="#1A2E18">
+                {safeSteps.toLocaleString()}
+              </Txt>
+            </Row>
+
+            <View>
+              <Txt s={11} w="500" color="#3C5E37">
+                / {stepsGoal.toLocaleString()} steps
+              </Txt>
+              <Txt s={11} w="500" color="#3C5E37" style={{ marginTop: 2 }}>
+                Your campus walks count.
+              </Txt>
+            </View>
           </Pressable>
-        </Card>
-      </Row>
+
+          {/* 4. Workout Card */}
+          <View
+            style={{
+              flex: 1,
+              backgroundColor: '#FCE1D9',
+              borderRadius: 24,
+              padding: 16,
+              justifyContent: 'space-between',
+              minHeight: 200,
+            }}
+          >
+            <Row style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+              <Txt s={13} w="600" color="#5C362C">Workout</Txt>
+              <Pressable
+                accessibilityLabel="Log workout"
+                onPress={() => setShowWorkoutModal(true)}
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: 14,
+                  backgroundColor: '#FFFFFF',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 2px 6px rgba(15, 23, 42, 0.06)',
+                }}
+              >
+                <Icon name="plus" size={14} color="#334155" />
+              </Pressable>
+            </Row>
+
+            <View style={{ marginVertical: 6 }}>
+              <Row style={{ alignItems: 'baseline', gap: 4 }}>
+                <Txt s={30} w="800" color="#2B1915">{displayWorkoutMins}</Txt>
+                <Txt s={13} w="500" color="#6E453B">mins</Txt>
+              </Row>
+
+              <Txt s={11} w="700" color="#A85A47" style={{ marginTop: 6 }}>
+                {displayBurnedKcal} kcal burned
+              </Txt>
+            </View>
+
+            <Row style={{ alignItems: 'center', gap: 5 }}>
+              <Txt s={12} color="#9E5644">🏋️</Txt>
+              <Txt s={11} w="500" color="#9E5644" numberOfLines={1} style={{ flex: 1 }}>
+                {workoutLabel}
+              </Txt>
+            </Row>
+          </View>
+        </Row>
+      </View>
 
       {/* Today's Meals Section */}
       <SectionHead
@@ -456,7 +712,7 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
 
       {/* Meals List */}
       <View style={{ gap: 10, marginBottom: 24 }}>
-        {todayMeals.map((meal) => (
+        {todayMeals.map((meal: any) => (
           <Card key={meal.id} style={{ padding: 14 }}>
             <Row style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <Row style={{ alignItems: 'center', gap: 10, flex: 1 }}>
@@ -465,13 +721,29 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
                     width: 44,
                     height: 44,
                     borderRadius: 14,
-                    backgroundColor: meal.category === 'Breakfast' ? '#FFEFA0' : meal.category === 'Lunch' ? '#DDF0D3' : meal.category === 'Dinner' ? '#D8EDF8' : '#FBDAD6',
+                    backgroundColor:
+                      meal.category === 'Breakfast'
+                        ? '#FFEFA0'
+                        : meal.category === 'Lunch'
+                        ? '#DDF0D3'
+                        : meal.category === 'Dinner'
+                        ? '#D8EDF8'
+                        : '#FBDAD6',
                     alignItems: 'center',
                     justifyContent: 'center',
                     flexShrink: 0,
                   }}
                 >
-                  {meal.imageUrl || meal.image ? <Image source={{ uri: meal.imageUrl || meal.image }} style={{ width: 44, height: 44, borderRadius: 14, objectFit: 'cover' as const }} /> : <Txt s={22} style={{ textAlign: 'center', lineHeight: 26 }}>{getMealEmoji(meal.name, meal.category)}</Txt>}
+                  {meal.imageUrl || meal.image ? (
+                    <Image
+                      source={{ uri: meal.imageUrl || meal.image }}
+                      style={{ width: 44, height: 44, borderRadius: 14, objectFit: 'cover' as const }}
+                    />
+                  ) : (
+                    <Txt s={22} style={{ textAlign: 'center', lineHeight: 26 }}>
+                      {getMealEmoji(meal.name, meal.category)}
+                    </Txt>
+                  )}
                 </View>
 
                 <View style={{ flex: 1 }}>
@@ -488,7 +760,11 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
                 <Txt s={15} w="800">{meal.kcal} <Txt s={11} color={c.mute}>kcal</Txt></Txt>
                 <Pressable
                   accessibilityLabel={`Edit ${meal.name}`}
-                  onPress={() => { setEditingMeal(meal); setCapturedMeal(null); onNavigate('Scan Result'); }}
+                  onPress={() => {
+                    setEditingMeal(meal);
+                    setCapturedMeal(null);
+                    onNavigate('Scan Result');
+                  }}
                   style={{ padding: 4 }}
                 >
                   <Icon name="edit" size={16} color={c.ink} />
@@ -513,9 +789,143 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
         )}
       </View>
 
+      {/* Quick Log Weight Modal */}
+      {showWeightModal && (
+        <View
+          style={{
+            position: 'fixed' as any,
+            top: 0,
+            bottom: 0,
+            left: 0,
+            right: 0,
+            backgroundColor: 'rgba(0,0,0,0.65)',
+            justifyContent: 'center',
+            alignItems: 'center',
+            padding: 16,
+            zIndex: 999,
+          }}
+        >
+          <View style={{ width: '100%', maxWidth: 380, backgroundColor: c.card, borderRadius: 24, padding: 22, gap: 14 }}>
+            <Row style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+              <Txt s={18} w="800">Log Weight</Txt>
+              <Pressable onPress={() => setShowWeightModal(false)}>
+                <Icon name="close" size={20} color={c.mute} />
+              </Pressable>
+            </Row>
+
+            <View style={{ gap: 4 }}>
+              <Txt s={12} color={c.mute}>Current Weight (kg)</Txt>
+              <TextInput
+                value={weightInputKg}
+                onChangeText={setWeightInputKg}
+                inputMode="decimal"
+                placeholder="e.g. 54.8"
+                placeholderTextColor="#94A3B8"
+                style={{ borderWidth: 1, borderColor: c.line, borderRadius: 12, padding: 10, fontSize: 14, backgroundColor: '#FFFFFF', color: '#1E293B' }}
+              />
+            </View>
+
+            <View style={{ gap: 4 }}>
+              <Txt s={12} color={c.mute}>Note (optional)</Txt>
+              <TextInput
+                value={weightInputNote}
+                onChangeText={setWeightInputNote}
+                placeholder="e.g. Morning weigh-in"
+                placeholderTextColor="#94A3B8"
+                style={{ borderWidth: 1, borderColor: c.line, borderRadius: 12, padding: 10, fontSize: 14, backgroundColor: '#FFFFFF', color: '#1E293B' }}
+              />
+            </View>
+
+            <Btn bg={c.yellow} onPress={handleSaveWeight} style={{ marginTop: 4 }}>
+              Save Weight Entry
+            </Btn>
+          </View>
+        </View>
+      )}
+
+      {/* Quick Log Workout Modal */}
+      {showWorkoutModal && (
+        <View
+          style={{
+            position: 'fixed' as any,
+            top: 0,
+            bottom: 0,
+            left: 0,
+            right: 0,
+            backgroundColor: 'rgba(0,0,0,0.65)',
+            justifyContent: 'center',
+            alignItems: 'center',
+            padding: 16,
+            zIndex: 999,
+          }}
+        >
+          <View style={{ width: '100%', maxWidth: 380, backgroundColor: c.card, borderRadius: 24, padding: 22, gap: 14 }}>
+            <Row style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+              <Txt s={18} w="800">Log Workout</Txt>
+              <Pressable onPress={() => setShowWorkoutModal(false)}>
+                <Icon name="close" size={20} color={c.mute} />
+              </Pressable>
+            </Row>
+
+            <View style={{ gap: 4 }}>
+              <Txt s={12} color={c.mute}>Activity Label</Txt>
+              <TextInput
+                value={workoutInputLabel}
+                onChangeText={setWorkoutInputLabel}
+                placeholder="e.g. Afternoon strength"
+                placeholderTextColor="#94A3B8"
+                style={{ borderWidth: 1, borderColor: c.line, borderRadius: 12, padding: 10, fontSize: 14, backgroundColor: '#FFFFFF', color: '#1E293B' }}
+              />
+            </View>
+
+            <Row style={{ gap: 10 }}>
+              <View style={{ flex: 1, gap: 4 }}>
+                <Txt s={12} color={c.mute}>Duration (mins)</Txt>
+                <TextInput
+                  value={workoutInputMins}
+                  onChangeText={setWorkoutInputMins}
+                  inputMode="numeric"
+                  placeholder="30"
+                  placeholderTextColor="#94A3B8"
+                  style={{ borderWidth: 1, borderColor: c.line, borderRadius: 12, padding: 10, fontSize: 14, backgroundColor: '#FFFFFF', color: '#1E293B' }}
+                />
+              </View>
+              <View style={{ flex: 1, gap: 4 }}>
+                <Txt s={12} color={c.mute}>Calories Burned</Txt>
+                <TextInput
+                  value={workoutInputKcal}
+                  onChangeText={setWorkoutInputKcal}
+                  inputMode="numeric"
+                  placeholder="210"
+                  placeholderTextColor="#94A3B8"
+                  style={{ borderWidth: 1, borderColor: c.line, borderRadius: 12, padding: 10, fontSize: 14, backgroundColor: '#FFFFFF', color: '#1E293B' }}
+                />
+              </View>
+            </Row>
+
+            <Btn bg={c.yellow} onPress={handleSaveWorkout} style={{ marginTop: 4 }}>
+              Save Workout
+            </Btn>
+          </View>
+        </View>
+      )}
+
       {/* Manual Add Meal Modal */}
       {showAddMealModal && (
-        <View style={{ position: 'fixed' as any, top: 0, bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.65)', justifyContent: 'center', alignItems: 'center', padding: 16, zIndex: 999 }}>
+        <View
+          style={{
+            position: 'fixed' as any,
+            top: 0,
+            bottom: 0,
+            left: 0,
+            right: 0,
+            backgroundColor: 'rgba(0,0,0,0.65)',
+            justifyContent: 'center',
+            alignItems: 'center',
+            padding: 16,
+            zIndex: 999,
+          }}
+        >
           <View style={{ width: '100%', maxWidth: 420, backgroundColor: c.card, borderRadius: 24, padding: 22, gap: 14, overflow: 'visible' }}>
             <Row style={{ justifyContent: 'space-between', alignItems: 'center' }}>
               <Txt s={18} w="800">Add Meal Entry</Txt>
@@ -524,7 +934,6 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
               </Pressable>
             </Row>
 
-            {/* Meal / Dish Name with Search Dropdown */}
             <View style={{ gap: 4, position: 'relative', zIndex: 100 }}>
               <Row style={{ justifyContent: 'space-between', alignItems: 'center' }}>
                 <Txt s={12} color={c.mute}>Meal / Dish Name</Txt>
@@ -541,7 +950,6 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
                 style={{ borderWidth: 1, borderColor: c.line, borderRadius: 12, padding: 10, fontSize: 14, backgroundColor: '#FFFFFF', color: '#1E293B' }}
               />
 
-              {/* Search Results Dropdown with High Z-Index */}
               {showSuggestions && (
                 <View
                   style={{
@@ -561,14 +969,12 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
                     overflow: 'hidden',
                   }}
                 >
-                  {/* Feedback State 1: Loading */}
                   {isLoadingFoods && (
                     <View style={{ padding: 14, alignItems: 'center', justifyContent: 'center' }}>
                       <Txt s={12} color={c.mute}>⏳ Loading dataset...</Txt>
                     </View>
                   )}
 
-                  {/* Feedback State 2: Fetch / Parse Error */}
                   {!isLoadingFoods && foodDatasetError && (
                     <View style={{ padding: 14, alignItems: 'center', justifyContent: 'center' }}>
                       <Txt s={12} color="#EF4444" style={{ textAlign: 'center' }}>
@@ -577,7 +983,6 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
                     </View>
                   )}
 
-                  {/* Feedback State 3: No Results Found */}
                   {!isLoadingFoods && !foodDatasetError && mealName.trim().length > 0 && foodSuggestions.length === 0 && (
                     <View style={{ padding: 14, alignItems: 'center', justifyContent: 'center' }}>
                       <Txt s={12} color={c.mute}>
@@ -586,7 +991,6 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
                     </View>
                   )}
 
-                  {/* Filtered Results List */}
                   {!isLoadingFoods && !foodDatasetError && foodSuggestions.length > 0 && (
                     <ScrollView style={{ maxHeight: 200 }} nestedScrollEnabled>
                       {foodSuggestions.map((item) => (
@@ -631,7 +1035,6 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
               )}
             </View>
 
-            {/* Category Select */}
             <View style={{ gap: 6 }}>
               <Txt s={12} color={c.mute}>Category</Txt>
               <Row style={{ gap: 6 }}>
