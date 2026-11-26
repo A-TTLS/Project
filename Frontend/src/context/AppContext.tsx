@@ -30,6 +30,13 @@ export interface MealItem {
   portionMultiplier?: number;
 }
 
+export interface WeightLogItem {
+  id: string;
+  weightKg: number;
+  recordedAt: string;
+  note?: string | null;
+}
+
 export interface VoucherItem {
   id: string;
   brand: string;
@@ -85,6 +92,7 @@ interface AppContextType {
   groupsCount: number;
   currentWeight: number;
   targetWeight: number;
+  weightHistory: WeightLogItem[];
   bmi: number;
   calorieGoal: number;
   proteinGoal: number;
@@ -115,12 +123,15 @@ interface AppContextType {
   waterMl: number;
   stepsCount: number;
   workoutMins: number;
+  workoutLabel: string;
   todayMeals: MealItem[];
   capturedMeal: CapturedMeal | null;
   setCapturedMeal: (meal: CapturedMeal | null) => void;
   editingMeal: MealItem | null;
   setEditingMeal: (meal: MealItem | null) => void;
   addWater: (amount?: number) => void;
+  logWeight: (weightKg: number, note?: string) => Promise<void>;
+  logWorkout: (minutes: number, kcalBurned: number, label?: string) => Promise<void>;
   logMeal: (meal: Omit<MealItem, 'id' | 'logged'>) => Promise<void>;
   updateMeal: (id: string, updatedFields: Partial<Omit<MealItem, 'id' | 'logged'>>) => Promise<void>;
   deleteMeal: (id: string) => Promise<void>;
@@ -179,33 +190,36 @@ function getInitialDayState(): {
   steps: number;
   workout: number;
   burned: number;
+  workoutLabel: string;
 } {
   if (typeof window === 'undefined') {
-    return { meals: [], water: 0, steps: 0, workout: 0, burned: 0 };
+    return { meals: [], water: 0, steps: 0, workout: 0, burned: 0, workoutLabel: 'Afternoon strength' };
   }
   try {
     const todayStr = getLocalYYYYMMDD();
     const lastActiveDate = localStorage.getItem('caloriesnap_active_date');
     if (lastActiveDate !== todayStr) {
-      // It's a brand new calendar day! Reset daily caches
       localStorage.setItem('caloriesnap_active_date', todayStr);
       localStorage.removeItem('caloriesnap_today_meals');
       localStorage.removeItem('caloriesnap_today_metrics');
-      return { meals: [], water: 0, steps: 0, workout: 0, burned: 0 };
+      return { meals: [], water: 0, steps: 0, workout: 0, burned: 0, workoutLabel: 'Afternoon strength' };
     }
     const cachedMeals = localStorage.getItem('caloriesnap_today_meals');
     const cachedMetrics = localStorage.getItem('caloriesnap_today_metrics');
     const parsedMeals = cachedMeals ? JSON.parse(cachedMeals) : [];
-    const parsedMetrics = cachedMetrics ? JSON.parse(cachedMetrics) : { water: 0, steps: 0, workout: 0, burned: 0 };
+    const parsedMetrics = cachedMetrics
+      ? JSON.parse(cachedMetrics)
+      : { water: 0, steps: 0, workout: 0, burned: 0, workoutLabel: 'Afternoon strength' };
     return {
       meals: parsedMeals,
       water: parsedMetrics.water || 0,
       steps: parsedMetrics.steps || 0,
       workout: parsedMetrics.workout || 0,
       burned: parsedMetrics.burned || 0,
+      workoutLabel: parsedMetrics.workoutLabel || 'Afternoon strength',
     };
   } catch {
-    return { meals: [], water: 0, steps: 0, workout: 0, burned: 0 };
+    return { meals: [], water: 0, steps: 0, workout: 0, burned: 0, workoutLabel: 'Afternoon strength' };
   }
 }
 
@@ -219,7 +233,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [userId, setUserId] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState<string>(initialCache.email || '');
 
-  // User Profile State (Dynamic, never hardcoded to one specific person!)
+  // User Profile State
   const [userName, setUserName] = useState<string>(
     initialCache.name || initialCache.full_name || 'CalorieSnap User'
   );
@@ -243,6 +257,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [targetWeight, setTargetWeight] = useState<number>(
     Number(initialCache.targetWeight ?? initialCache.target_weight_kg) || 52.0
   );
+  const [weightHistory, setWeightHistory] = useState<WeightLogItem[]>(() => {
+    if (typeof window === 'undefined') return [];
+    try {
+      const cached = localStorage.getItem('caloriesnap_weight_history');
+      return cached ? JSON.parse(cached) : [];
+    } catch {
+      return [];
+    }
+  });
   const [bmi, setBmi] = useState<number>(() => {
     const w = Number(initialCache.currentWeight ?? initialCache.current_weight_kg) || 55.0;
     const h = (Number(initialCache.height_cm) || 165) / 100;
@@ -274,11 +297,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return null;
   });
 
-  // Daily Metrics (Dynamic per day, cleanly resets to 0 on a new day)
+  // Daily Metrics
   const [burnedKcal, setBurnedKcal] = useState<number>(initialDay.burned);
   const [waterMl, setWaterMl] = useState<number>(initialDay.water);
   const [stepsCount, setStepsCount] = useState<number>(initialDay.steps);
   const [workoutMins, setWorkoutMins] = useState<number>(initialDay.workout);
+  const [workoutLabel, setWorkoutLabel] = useState<string>(initialDay.workoutLabel);
 
   // Toast
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -287,7 +311,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setTimeout(() => setToastMessage(null), 3000);
   };
 
-  // Meals List (Dynamic per day, clean start for each new calendar day)
+  // Meals List
   const [todayMeals, setTodayMeals] = useState<MealItem[]>(initialDay.meals);
   const [capturedMeal, setCapturedMeal] = useState<CapturedMeal | null>(null);
   const [editingMeal, setEditingMeal] = useState<MealItem | null>(null);
@@ -403,7 +427,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     { name: 'Chloe Lim', streak: '🔥 1-day streak', pct: '38% of daily goal', slots: 1 },
   ]);
 
-  // Set Current User manually (e.g. upon login/registration)
+  // Set Current User manually
   const setCurrentUser = async (u: { id?: string; email?: string; name?: string; username?: string }) => {
     if (u.id) setUserId(u.id);
     if (u.email) setUserEmail(u.email);
@@ -437,7 +461,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setUserId(user.id);
       if (user.email) setUserEmail(user.email);
 
-      // Immediately extract full name from auth metadata if present
       const metaFullName = user.user_metadata?.full_name || user.email?.split('@')[0] || 'Student';
       const metaUsername = user.user_metadata?.username || `@${user.email?.split('@')[0] || 'student'}`;
       setUserName(metaFullName);
@@ -500,7 +523,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         } catch {}
       } else {
         setHasCompletedOnboarding(false);
-        // Self-heal: ensure profiles row exists in database for this authenticated user
         await supabase.from('profiles').upsert({
           id: user.id,
           email: user.email,
@@ -510,7 +532,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           daily_calorie_target: 1850,
           streak_days: 1,
           snap_points: 100,
-        }).then(() => { });
+        }).then(() => {});
       }
 
       // 2. Fetch today's metrics (water, steps, workout)
@@ -527,26 +549,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setStepsCount(metrics.steps_count ?? 0);
         setWorkoutMins(metrics.workout_minutes ?? 0);
         setBurnedKcal(metrics.workout_calories_burned ?? 0);
+        if (metrics.workout_label) setWorkoutLabel(metrics.workout_label);
         try {
           localStorage.setItem('caloriesnap_today_metrics', JSON.stringify({
             water: metrics.water_ml ?? 0,
             steps: metrics.steps_count ?? 0,
             workout: metrics.workout_minutes ?? 0,
             burned: metrics.workout_calories_burned ?? 0,
+            workoutLabel: metrics.workout_label || 'Afternoon strength',
           }));
         } catch {}
       } else {
-        // Clean new day metrics reset
         setWaterMl(0);
         setStepsCount(0);
         setWorkoutMins(0);
         setBurnedKcal(0);
+        setWorkoutLabel('Afternoon strength');
         try {
           localStorage.setItem('caloriesnap_today_metrics', JSON.stringify({
             water: 0,
             steps: 0,
             workout: 0,
             burned: 0,
+            workoutLabel: 'Afternoon strength',
           }));
         } catch {}
       }
@@ -581,21 +606,51 @@ export function AppProvider({ children }: { children: ReactNode }) {
           localStorage.setItem('caloriesnap_today_meals', JSON.stringify(mapped));
         } catch {}
       } else {
-        // Clean new day with 0 meals logged yet
         setTodayMeals([]);
         try {
           localStorage.setItem('caloriesnap_today_meals', JSON.stringify([]));
         } catch {}
       }
 
-      // 4. Fetch All Public Posts from Supabase social_posts joined with author profile, likes, and comments
+      // 3b. Fetch real weight history logs from Supabase
+      const { data: wLogs } = await supabase
+        .from('weight_logs')
+        .select('id, weight_kg, recorded_at, note')
+        .eq('user_id', user.id)
+        .order('recorded_at', { ascending: true })
+        .limit(30);
+
+      if (wLogs && wLogs.length > 0) {
+        const mappedWeights: WeightLogItem[] = wLogs.map((w: any) => ({
+          id: w.id,
+          weightKg: Number(w.weight_kg),
+          recordedAt: w.recorded_at,
+          note: w.note,
+        }));
+        setWeightHistory(mappedWeights);
+        const latestW = mappedWeights[mappedWeights.length - 1].weightKg;
+        setCurrentWeight(latestW);
+        try {
+          localStorage.setItem('caloriesnap_weight_history', JSON.stringify(mappedWeights));
+        } catch {}
+      } else if (profile?.current_weight_kg) {
+        setWeightHistory([
+          {
+            id: 'initial-profile',
+            weightKg: Number(profile.current_weight_kg),
+            recordedAt: profile.updated_at || new Date().toISOString(),
+          },
+        ]);
+      }
+
+      // 4. Fetch All Public Posts
       await fetchPublicPosts(user.id);
     } catch (err) {
       console.warn('Failed to load user data from Supabase:', err);
     }
   };
 
-  // Helper to fetch all public social posts joined across all accounts
+  // Helper to fetch all public social posts
   const fetchPublicPosts = async (currentUserId?: string | null) => {
     if (!isSupabaseConfigured) return;
     try {
@@ -681,7 +736,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     loadUserData();
 
-    // ─── Realtime Subscription for social_posts across all users ───────────
     let channel: any = null;
     if (isSupabaseConfigured) {
       channel = supabase
@@ -690,14 +744,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
           'postgres_changes',
           { event: '*', schema: 'public', table: 'social_posts' },
           () => {
-            // Re-fetch all public posts whenever any user inserts, updates, or deletes
             void fetchPublicPosts(userId);
           }
         )
         .subscribe();
     }
 
-    // Listen for auth state changes (login, logout, token refresh)
     if (isSupabaseConfigured) {
       const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
         if (session?.user) {
@@ -726,7 +778,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    // Check if the calendar date rolled over while app was in background or open
     const checkDayRollover = () => {
       const todayStr = getLocalYYYYMMDD();
       const lastActiveDate = localStorage.getItem('caloriesnap_active_date');
@@ -747,7 +798,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     window.addEventListener('focus', checkDayRollover);
     document.addEventListener('visibilitychange', checkDayRollover);
-    const interval = setInterval(checkDayRollover, 60000); // Check once per minute
+    const interval = setInterval(checkDayRollover, 60000);
 
     return () => {
       window.removeEventListener('focus', checkDayRollover);
@@ -780,6 +831,125 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // Log Weight Action (updates currentWeight, BMI, weightHistory, and Supabase weight_logs)
+  const logWeight = async (weightKg: number, note?: string) => {
+    const cleanWeight = Math.round(Number(weightKg) * 10) / 10;
+    if (!cleanWeight || cleanWeight <= 0) return;
+
+    const tempId = `w_${Date.now()}`;
+    const newEntry: WeightLogItem = {
+      id: tempId,
+      weightKg: cleanWeight,
+      recordedAt: new Date().toISOString(),
+      note: note?.trim() || null,
+    };
+
+    setCurrentWeight(cleanWeight);
+    const hM = (userHeightCm || 165) / 100;
+    const calculatedBmi = Math.round((cleanWeight / (hM * hM)) * 10) / 10;
+    if (calculatedBmi > 10 && calculatedBmi < 60) setBmi(calculatedBmi);
+
+    setWeightHistory((prev) => {
+      const updated = [...prev, newEntry];
+      try {
+        localStorage.setItem('caloriesnap_weight_history', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+
+    try {
+      const prevCache = JSON.parse(localStorage.getItem('caloriesnap_profile_cache') || '{}');
+      localStorage.setItem(
+        'caloriesnap_profile_cache',
+        JSON.stringify({ ...prevCache, currentWeight: cleanWeight, current_weight_kg: cleanWeight })
+      );
+    } catch {}
+
+    showToast(`⚖️ Weight updated to ${cleanWeight.toFixed(1)} kg`);
+
+    if (isSupabaseConfigured && userId) {
+      try {
+        const { data, error } = await supabase
+          .from('weight_logs')
+          .insert({
+            user_id: userId,
+            weight_kg: cleanWeight,
+            note: note?.trim() || null,
+            recorded_at: newEntry.recordedAt,
+          })
+          .select()
+          .single();
+
+        if (!error && data) {
+          setWeightHistory((prev) => {
+            const updated = prev.map((item) =>
+              item.id === tempId ? { ...item, id: data.id } : item
+            );
+            try {
+              localStorage.setItem('caloriesnap_weight_history', JSON.stringify(updated));
+            } catch {}
+            return updated;
+          });
+        }
+
+        await supabase
+          .from('profiles')
+          .update({ current_weight_kg: cleanWeight, updated_at: new Date().toISOString() })
+          .eq('id', userId);
+      } catch (err) {
+        console.warn('Failed to save weight log to Supabase:', err);
+      }
+    }
+  };
+
+  // Log Workout Action
+  const logWorkout = async (minutes: number, kcalBurned: number, label = 'Afternoon strength') => {
+    const cleanMins = Math.max(0, Math.round(minutes));
+    const cleanKcal = Math.max(0, Math.round(kcalBurned));
+    if (cleanMins <= 0 && cleanKcal <= 0) return;
+
+    const newWorkoutMins = workoutMins + cleanMins;
+    const newBurnedKcal = burnedKcal + cleanKcal;
+    const cleanLabel = label.trim() || 'Afternoon strength';
+
+    setWorkoutMins(newWorkoutMins);
+    setBurnedKcal(newBurnedKcal);
+    setWorkoutLabel(cleanLabel);
+
+    try {
+      const prevMetrics = JSON.parse(localStorage.getItem('caloriesnap_today_metrics') || '{}');
+      localStorage.setItem(
+        'caloriesnap_today_metrics',
+        JSON.stringify({
+          ...prevMetrics,
+          workout: newWorkoutMins,
+          burned: newBurnedKcal,
+          workoutLabel: cleanLabel,
+        })
+      );
+    } catch {}
+
+    showToast(`💪 Logged ${cleanMins}m (${cleanKcal} kcal burned)`);
+
+    if (isSupabaseConfigured && userId) {
+      try {
+        const todayStr = getLocalYYYYMMDD();
+        await supabase.from('daily_metrics').upsert(
+          {
+            user_id: userId,
+            metric_date: todayStr,
+            workout_minutes: newWorkoutMins,
+            workout_calories_burned: newBurnedKcal,
+            workout_label: cleanLabel,
+          },
+          { onConflict: 'user_id,metric_date' }
+        );
+      } catch (err) {
+        console.warn('Failed to persist workout to Supabase:', err);
+      }
+    }
+  };
+
   // Log Meal Action
   const logMeal = async (newMeal: Omit<MealItem, 'id' | 'logged'>) => {
     const tempId = `m_${Date.now()}`;
@@ -791,7 +961,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       time: newMeal.time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     };
 
-    // 1. Immediately update local state and local storage cache
     setTodayMeals((prev) => {
       const updated = [mealItem, ...prev];
       try {
@@ -802,7 +971,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     showToast(`🥗 Logged "${newMeal.name}" (+${newMeal.kcal} kcal)`);
 
-    // 2. Persist to Supabase if configured and authenticated
     if (isSupabaseConfigured && userId) {
       try {
         const { data, error } = await supabase.from('meals').insert({
@@ -814,7 +982,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           carbs_g: Number(newMeal.carbs) || 0,
           fat_g: Number(newMeal.fat) || 0,
           image_url: newMeal.imageUrl || newMeal.image || null,
-          is_public: true, // Shared meals are viewable by all users under RLS
+          is_public: true,
           logged_at: new Date().toISOString(),
         }).select().single();
 
@@ -831,10 +999,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
           console.warn('Supabase meals insert error:', error.message);
         }
 
-        // Auto-post to Discover feed after a successful meal log
         const dailyGoal = calorieGoal || 1850;
         const pct = Math.round((newMeal.kcal / dailyGoal) * 100);
-        // Use the meal's image if available, otherwise a food placeholder
         const postImage =
           newMeal.image && /^https?:\/\//.test(newMeal.image) ? newMeal.image : null;
 
@@ -848,11 +1014,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
           image_url: postImage,
           calories: newMeal.kcal,
           pct_daily_goal: pct,
-          visibility: 'public', // Explicitly public for Discover feed
+          visibility: 'public',
           created_at: new Date().toISOString(),
         });
 
-        // Trigger feed reload to fetch joined profiles & likes
         void fetchPublicPosts(userId);
       } catch (err) {
         console.warn('Failed to save meal to Supabase:', err);
@@ -982,6 +1147,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setUserHandle('@user');
     setUserBio('Uni life, good food & little wins');
     setTodayMeals([]);
+    setWeightHistory([]);
     setCapturedMeal(null);
     setEditingMeal(null);
     setWaterMl(0);
@@ -994,6 +1160,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       localStorage.removeItem('caloriesnap_onboarding_data');
       localStorage.removeItem('caloriesnap_today_meals');
       localStorage.removeItem('caloriesnap_today_metrics');
+      localStorage.removeItem('caloriesnap_weight_history');
     } catch {}
     showToast('Signed out successfully.');
   };
@@ -1021,7 +1188,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         voucher_id: voucher.id,
         voucher_code: code,
         expires_at: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString(),
-      }).then(() => { });
+      }).then(() => {});
     }
 
     return { success: true, message: `Claimed! Voucher added to My Wallet.` };
@@ -1103,6 +1270,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         groupsCount,
         currentWeight,
         targetWeight,
+        weightHistory,
         bmi,
         calorieGoal,
         proteinGoal,
@@ -1122,12 +1290,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
         waterMl,
         stepsCount,
         workoutMins,
+        workoutLabel,
         todayMeals,
         capturedMeal,
         setCapturedMeal,
         editingMeal,
         setEditingMeal,
         addWater,
+        logWeight,
+        logWorkout,
         logMeal,
         updateMeal,
         deleteMeal,
