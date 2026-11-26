@@ -21,10 +21,15 @@ interface HomeScreenProps {
   onNavigate: (screen: string) => void;
 }
 
-/**
- * Dynamic Emoji Helper for Meals
- * Maps meal name or category to an appropriate, vibrant food emoji
- */
+const WORKOUT_KCAL_PER_MIN: Record<string, number> = {
+  'Afternoon strength': 3.5,
+  'Strength training': 3.5,
+  'Campus walk': 4.0,
+  'Running / Jogging': 8.0,
+  'Cycling': 6.5,
+  'Badminton / Sports': 7.0,
+};
+
 function getMealEmoji(name: string, category: string): string {
   const n = (name || '').toLowerCase();
 
@@ -59,9 +64,6 @@ function getMealEmoji(name: string, category: string): string {
   }
 }
 
-/**
- * Builds an SVG sparkline path purely from real logged weight entries
- */
 function buildRealWeightSparkline(logs: WeightLogItem[], width = 120, height = 40): string {
   const values = logs
     .map((entry) => Number(entry.weightKg))
@@ -81,7 +83,6 @@ function buildRealWeightSparkline(logs: WeightLogItem[], width = 120, height = 4
 
   const pts = values.map((val, idx) => {
     const x = padX + (idx / (values.length - 1)) * usableW;
-    // Lower weight = lower on screen (higher y), higher weight = higher on screen (lower y)
     const norm = max === min ? 0.5 : (max - val) / (max - min);
     const y = padY + norm * usableH;
     return { x, y };
@@ -129,25 +130,43 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
   const logWorkoutFn: ((mins: number, kcal: number, label?: string) => Promise<void> | void) | undefined =
     appContext.logWorkout;
 
-  const [lastWaterAdded, setLastWaterAdded] = useState<number>(250);
+  // Water history stack for reliable Undo (Ctrl+Z style)
+  const [waterHistory, setWaterHistory] = useState<number[]>([]);
+  const [localSteps, setLocalSteps] = useState<number>(0);
   const [localWorkoutMins, setLocalWorkoutMins] = useState<number>(0);
   const [localBurnedKcal, setLocalBurnedKcal] = useState<number>(0);
   const [workoutLabel, setWorkoutLabel] = useState<string>('Afternoon strength');
 
-  // Quick Weight Modal State
+  // Weight Modal State
   const [showWeightModal, setShowWeightModal] = useState(false);
   const [weightInputKg, setWeightInputKg] = useState('');
   const [weightInputNote, setWeightInputNote] = useState('');
 
-  // Quick Workout Modal State
+  // Steps Modal State
+  const [showStepsModal, setShowStepsModal] = useState(false);
+  const [stepsInput, setStepsInput] = useState('1500');
+
+  // Workout Modal State
   const [showWorkoutModal, setShowWorkoutModal] = useState(false);
   const [workoutInputMins, setWorkoutInputMins] = useState('30');
-  const [workoutInputKcal, setWorkoutInputKcal] = useState('210');
+  const [workoutInputKcal, setWorkoutInputKcal] = useState('105');
   const [workoutInputLabel, setWorkoutInputLabel] = useState('Afternoon strength');
+  const [kcalManuallyEdited, setKcalManuallyEdited] = useState(false);
 
   const handleAddWater = (amount: number) => {
-    setLastWaterAdded(amount);
+    setWaterHistory((prev) => [...prev, amount]);
     addWater(amount);
+  };
+
+  const handleUndoWater = () => {
+    const currentWater = Number(waterMl) || 0;
+    if (currentWater <= 0) return;
+
+    const lastAmount = waterHistory.length > 0 ? waterHistory[waterHistory.length - 1] : 250;
+    const undoAmount = Math.min(lastAmount, currentWater);
+
+    setWaterHistory((prev) => prev.slice(0, -1));
+    addWater(-undoAmount);
   };
 
   const handleOpenWeightModal = () => {
@@ -166,6 +185,35 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
       await logWeight(parsed, weightInputNote);
     }
     setShowWeightModal(false);
+  };
+
+  const handleSaveSteps = () => {
+    const added = Math.max(0, parseInt(stepsInput, 10) || 0);
+    if (added <= 0) {
+      showToast('⚠️ Please enter steps greater than 0');
+      return;
+    }
+    setLocalSteps((prev) => prev + added);
+    showToast(`👟 Added ${added.toLocaleString()} steps`);
+    setShowStepsModal(false);
+  };
+
+  const handleWorkoutMinutesChange = (val: string) => {
+    setWorkoutInputMins(val);
+    if (!kcalManuallyEdited) {
+      const mins = Math.max(0, parseInt(val, 10) || 0);
+      const rate = WORKOUT_KCAL_PER_MIN[workoutInputLabel] ?? 4.0;
+      setWorkoutInputKcal(String(Math.round(mins * rate)));
+    }
+  };
+
+  const handleWorkoutLabelChange = (val: string) => {
+    setWorkoutInputLabel(val);
+    if (!kcalManuallyEdited) {
+      const mins = Math.max(0, parseInt(workoutInputMins, 10) || 0);
+      const rate = WORKOUT_KCAL_PER_MIN[val] ?? 4.0;
+      setWorkoutInputKcal(String(Math.round(mins * rate)));
+    }
   };
 
   const handleSaveWorkout = async () => {
@@ -187,6 +235,7 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
       showToast(`💪 Logged ${mins}m (${kcal} kcal burned)`);
     }
 
+    setKcalManuallyEdited(false);
     setShowWorkoutModal(false);
   };
 
@@ -259,16 +308,18 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
       : safeCurrentWeight > 0
       ? [{ id: 'current-only', weightKg: safeCurrentWeight, recordedAt: new Date().toISOString() }]
       : [];
+  const hasMultipleWeightPoints = realWeightSeries.length >= 2;
   const weightSparkPath = buildRealWeightSparkline(realWeightSeries);
 
+  const safeWaterMl = Math.max(0, Number(waterMl) || 0);
   const waterGoalMl = 2000;
   const waterSegments = 8;
   const filledWaterSegments = Math.min(
     waterSegments,
-    Math.max(0, Math.floor((Number(waterMl) || 0) / (waterGoalMl / waterSegments)))
+    Math.max(0, Math.floor(safeWaterMl / (waterGoalMl / waterSegments)))
   );
 
-  const safeSteps = Math.max(0, Number(stepsCount) || 0);
+  const safeSteps = Math.max(0, (Number(stepsCount) || 0) + localSteps);
   const stepsGoal = 10000;
   const stepsRatio = Math.min(1, safeSteps / stepsGoal);
   const ringRadius = 22;
@@ -309,7 +360,7 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
     <Screen
       tab="Home"
       onSelectTab={onNavigate}
-      hideTabBar={showAddMealModal || showWorkoutModal || showWeightModal}
+      hideTabBar={showAddMealModal || showWorkoutModal || showWeightModal || showStepsModal}
     >
       {/* Top Header */}
       <Row style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
@@ -468,7 +519,7 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
 
         {/* Row 1: Weight + Water */}
         <Row style={{ gap: 12, marginBottom: 12, alignItems: 'stretch' }}>
-          {/* 1. Weight Card (Tap to log real weight into Supabase weight_logs) */}
+          {/* 1. Weight Card */}
           <Pressable
             accessibilityLabel="Log weight"
             onPress={handleOpenWeightModal}
@@ -510,15 +561,25 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
                   strokeLinecap="round"
                   strokeLinejoin="round"
                 />
+                {!hasMultipleWeightPoints && (
+                  <circle cx="60" cy="20" r="4" fill="#4D7C43" />
+                )}
               </svg>
             </View>
 
-            <Txt s={11} w="500" color="#64748B">
-              {safeTargetWeight > 0 ? `Target ${safeTargetWeight.toFixed(1)} kg` : 'Tap to log weight'}
-            </Txt>
+            <View>
+              <Txt s={11} w="500" color="#64748B">
+                {safeTargetWeight > 0 ? `Target ${safeTargetWeight.toFixed(1)} kg` : 'Tap to log weight'}
+              </Txt>
+              {!hasMultipleWeightPoints && (
+                <Txt s={10} color="#94A3B8" style={{ marginTop: 2 }}>
+                  Log 2+ weights for trend curve
+                </Txt>
+              )}
+            </View>
           </Pressable>
 
-          {/* 2. Water Card */}
+          {/* 2. Water Card (with Undo button) */}
           <View
             style={{
               flex: 1,
@@ -536,7 +597,7 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
 
             <View style={{ marginVertical: 4 }}>
               <Txt s={28} w="800" color="#0F172A">
-                {(Number(waterMl) || 0).toLocaleString()}
+                {safeWaterMl.toLocaleString()}
               </Txt>
               <Txt s={11} w="500" color="#475569" style={{ marginBottom: 10 }}>
                 / {waterGoalMl.toLocaleString()} ml
@@ -557,27 +618,48 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
               </Row>
             </View>
 
-            <Pressable
-              onPress={() => handleAddWater(250)}
-              style={{
-                backgroundColor: '#FFFFFF',
-                borderRadius: 999,
-                paddingVertical: 8,
-                alignItems: 'center',
-                justifyContent: 'center',
-                boxShadow: '0 2px 6px rgba(15, 23, 42, 0.05)',
-              }}
-            >
-              <Txt s={12} w="800" color="#0F172A">+250ml</Txt>
-            </Pressable>
+            <Row style={{ gap: 6, alignItems: 'center' }}>
+              <Pressable
+                onPress={() => handleAddWater(250)}
+                style={{
+                  flex: 1,
+                  backgroundColor: '#FFFFFF',
+                  borderRadius: 999,
+                  paddingVertical: 8,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 2px 6px rgba(15, 23, 42, 0.05)',
+                }}
+              >
+                <Txt s={12} w="800" color="#0F172A">+250ml</Txt>
+              </Pressable>
+
+              <Pressable
+                accessibilityLabel="Undo water entry"
+                disabled={safeWaterMl <= 0}
+                onPress={handleUndoWater}
+                style={{
+                  backgroundColor: safeWaterMl > 0 ? '#FFFFFF' : 'rgba(255,255,255,0.45)',
+                  borderRadius: 999,
+                  paddingHorizontal: 10,
+                  paddingVertical: 8,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: safeWaterMl > 0 ? '0 2px 6px rgba(15, 23, 42, 0.05)' : undefined,
+                }}
+              >
+                <Txt s={11} w="700" color={safeWaterMl > 0 ? '#334155' : '#94A3B8'}>
+                  ↩ Undo
+                </Txt>
+              </Pressable>
+            </Row>
           </View>
         </Row>
 
         {/* Row 2: Steps + Workout */}
         <Row style={{ gap: 12, alignItems: 'stretch' }}>
-          {/* 3. Steps Card */}
-          <Pressable
-            onPress={() => onNavigate('Trend')}
+          {/* 3. Steps Card (with quick + button) */}
+          <View
             style={{
               flex: 1,
               backgroundColor: '#DCF3D4',
@@ -589,10 +671,27 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
           >
             <Row style={{ justifyContent: 'space-between', alignItems: 'center' }}>
               <Txt s={13} w="600" color="#2D4729">Steps</Txt>
-              <Icon name="footprints" size={16} color="#2D4729" />
+              <Pressable
+                accessibilityLabel="Add steps"
+                onPress={() => setShowStepsModal(true)}
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: 14,
+                  backgroundColor: '#FFFFFF',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 2px 6px rgba(15, 23, 42, 0.06)',
+                }}
+              >
+                <Icon name="plus" size={14} color="#2D4729" />
+              </Pressable>
             </Row>
 
-            <Row style={{ alignItems: 'center', gap: 10, marginVertical: 8 }}>
+            <Pressable
+              onPress={() => onNavigate('Trend')}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginVertical: 8 }}
+            >
               <svg width="52" height="52" viewBox="0 0 56 56" style={{ transform: 'rotate(-90deg)', flexShrink: 0 }}>
                 <circle
                   cx="28"
@@ -618,7 +717,7 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
               <Txt s={24} w="800" color="#1A2E18">
                 {safeSteps.toLocaleString()}
               </Txt>
-            </Row>
+            </Pressable>
 
             <View>
               <Txt s={11} w="500" color="#3C5E37">
@@ -628,7 +727,7 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
                 Your campus walks count.
               </Txt>
             </View>
-          </Pressable>
+          </View>
 
           {/* 4. Workout Card */}
           <View
@@ -645,7 +744,10 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
               <Txt s={13} w="600" color="#5C362C">Workout</Txt>
               <Pressable
                 accessibilityLabel="Log workout"
-                onPress={() => setShowWorkoutModal(true)}
+                onPress={() => {
+                  setKcalManuallyEdited(false);
+                  setShowWorkoutModal(true);
+                }}
                 style={{
                   width: 28,
                   height: 28,
@@ -819,7 +921,7 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
                 value={weightInputKg}
                 onChangeText={setWeightInputKg}
                 inputMode="decimal"
-                placeholder="e.g. 54.8"
+                placeholder="e.g. 54.5"
                 placeholderTextColor="#94A3B8"
                 style={{ borderWidth: 1, borderColor: c.line, borderRadius: 12, padding: 10, fontSize: 14, backgroundColor: '#FFFFFF', color: '#1E293B' }}
               />
@@ -838,6 +940,49 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
 
             <Btn bg={c.yellow} onPress={handleSaveWeight} style={{ marginTop: 4 }}>
               Save Weight Entry
+            </Btn>
+          </View>
+        </View>
+      )}
+
+      {/* Quick Log Steps Modal */}
+      {showStepsModal && (
+        <View
+          style={{
+            position: 'fixed' as any,
+            top: 0,
+            bottom: 0,
+            left: 0,
+            right: 0,
+            backgroundColor: 'rgba(0,0,0,0.65)',
+            justifyContent: 'center',
+            alignItems: 'center',
+            padding: 16,
+            zIndex: 999,
+          }}
+        >
+          <View style={{ width: '100%', maxWidth: 380, backgroundColor: c.card, borderRadius: 24, padding: 22, gap: 14 }}>
+            <Row style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+              <Txt s={18} w="800">Add Campus Steps</Txt>
+              <Pressable onPress={() => setShowStepsModal(false)}>
+                <Icon name="close" size={20} color={c.mute} />
+              </Pressable>
+            </Row>
+
+            <View style={{ gap: 4 }}>
+              <Txt s={12} color={c.mute}>Steps to Add</Txt>
+              <TextInput
+                value={stepsInput}
+                onChangeText={setStepsInput}
+                inputMode="numeric"
+                placeholder="e.g. 1500"
+                placeholderTextColor="#94A3B8"
+                style={{ borderWidth: 1, borderColor: c.line, borderRadius: 12, padding: 10, fontSize: 14, backgroundColor: '#FFFFFF', color: '#1E293B' }}
+              />
+            </View>
+
+            <Btn bg={c.yellow} onPress={handleSaveSteps} style={{ marginTop: 4 }}>
+              Add Steps
             </Btn>
           </View>
         </View>
@@ -871,7 +1016,7 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
               <Txt s={12} color={c.mute}>Activity Label</Txt>
               <TextInput
                 value={workoutInputLabel}
-                onChangeText={setWorkoutInputLabel}
+                onChangeText={handleWorkoutLabelChange}
                 placeholder="e.g. Afternoon strength"
                 placeholderTextColor="#94A3B8"
                 style={{ borderWidth: 1, borderColor: c.line, borderRadius: 12, padding: 10, fontSize: 14, backgroundColor: '#FFFFFF', color: '#1E293B' }}
@@ -883,7 +1028,7 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
                 <Txt s={12} color={c.mute}>Duration (mins)</Txt>
                 <TextInput
                   value={workoutInputMins}
-                  onChangeText={setWorkoutInputMins}
+                  onChangeText={handleWorkoutMinutesChange}
                   inputMode="numeric"
                   placeholder="30"
                   placeholderTextColor="#94A3B8"
@@ -891,12 +1036,15 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
                 />
               </View>
               <View style={{ flex: 1, gap: 4 }}>
-                <Txt s={12} color={c.mute}>Calories Burned</Txt>
+                <Txt s={12} color={c.mute}>Calories Burned (auto/edit)</Txt>
                 <TextInput
                   value={workoutInputKcal}
-                  onChangeText={setWorkoutInputKcal}
+                  onChangeText={(val) => {
+                    setKcalManuallyEdited(true);
+                    setWorkoutInputKcal(val);
+                  }}
                   inputMode="numeric"
-                  placeholder="210"
+                  placeholder="105"
                   placeholderTextColor="#94A3B8"
                   style={{ borderWidth: 1, borderColor: c.line, borderRadius: 12, padding: 10, fontSize: 14, backgroundColor: '#FFFFFF', color: '#1E293B' }}
                 />
