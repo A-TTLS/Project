@@ -16,12 +16,14 @@ interface LoginPageProps {
   onSignedIn: (email: string) => void;
   onGoToRegister: () => void;
   onGoBack: () => void;
+  onForgotPassword?: () => void;
 }
 
 export default function LoginPage({
   onSignedIn,
   onGoToRegister,
   onGoBack,
+  onForgotPassword,
 }: LoginPageProps) {
   const { width } = useWindowDimensions();
   const isWide = width >= 640;
@@ -192,6 +194,11 @@ export default function LoginPage({
                 <Icon name="eyeOff" size={18} />
               </Pressable>
             </View>
+            {onForgotPassword && (
+              <Pressable accessibilityRole="link" onPress={onForgotPassword} style={styles.forgotBtn}>
+                <Text style={styles.switchLink}>Forgot password?</Text>
+              </Pressable>
+            )}
           </View>
 
           <ActionButton
@@ -250,6 +257,10 @@ export default function LoginPage({
 }
 
 const styles = StyleSheet.create({
+  forgotBtn: {
+    alignSelf: "flex-end",
+    cursor: "pointer" as unknown as undefined,
+  },
   screen: {
     minHeight: "100vh",
     width: "100%",
