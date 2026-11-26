@@ -144,7 +144,7 @@ export default function ProfileScreen({ onNavigate, onLogOut }: ProfileScreenPro
     >
       {/* Top Header */}
       <Row style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-        <View>
+        <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
           <Txt s={12} color={c.mute}>Account & Health</Txt>
           <Txt s={24} w="800">Your Profile</Txt>
         </View>
@@ -247,12 +247,12 @@ export default function ProfileScreen({ onNavigate, onLogOut }: ProfileScreenPro
         </Row>
 
         <View style={{ marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderColor: c.line }}>
-          <Row style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+          <Row style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, flexWrap: 'wrap', gap: 4 }}>
             <Txt s={12} color={c.mute}>Daily Calorie Target</Txt>
             <Txt s={14} w="800">{calorieGoal.toLocaleString()} kcal</Txt>
           </Row>
           
-          <Row style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+          <Row style={{ justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
             <Txt s={12} color={c.mute}>Macro Split (P / C / F)</Txt>
             <Txt s={13} w="700">{proteinGoal}g · {carbsGoal}g · {fatGoal}g</Txt>
           </Row>
@@ -261,8 +261,8 @@ export default function ProfileScreen({ onNavigate, onLogOut }: ProfileScreenPro
 
       {/* Gamification & Vouchers Card */}
       <Card bg={c.yellow} style={{ marginBottom: 14 }}>
-        <Row style={{ justifyContent: 'space-between', alignItems: 'center' }}>
-          <View>
+        <Row style={{ justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+          <View style={{ flex: 1, minWidth: 0 }}>
             <Txt s={11} color="#665200" w="700">CAMPUS REWARDS</Txt>
             <Txt s={16} w="800">Little wins. Real treats.</Txt>
           </View>
@@ -274,8 +274,8 @@ export default function ProfileScreen({ onNavigate, onLogOut }: ProfileScreenPro
         </Txt>
 
         <Card style={{ marginBottom: 12, padding: 12 }}>
-          <Row style={{ justifyContent: 'space-between', alignItems: 'center' }}>
-            <View>
+          <Row style={{ justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+            <View style={{ flex: 1, minWidth: 0 }}>
               <Txt s={13} w="700">RM5 Off Salad Atelier</Txt>
               <Txt s={11} color={c.mute}>Campus outlet · 500 points</Txt>
             </View>
@@ -319,7 +319,7 @@ export default function ProfileScreen({ onNavigate, onLogOut }: ProfileScreenPro
               },
             ]}
           >
-            <Row style={{ alignItems: 'center', gap: 12 }}>
+            <Row style={{ alignItems: 'center', gap: 12, flex: 1, minWidth: 0, paddingRight: 8 }}>
               <View
                 style={{
                   width: 34,
@@ -328,11 +328,12 @@ export default function ProfileScreen({ onNavigate, onLogOut }: ProfileScreenPro
                   backgroundColor: item.danger ? '#FEE2E2' : c.bg,
                   alignItems: 'center',
                   justifyContent: 'center',
+                  flexShrink: 0,
                 }}
               >
                 <Icon name={item.icon} size={18} color={item.danger ? '#DC2626' : c.ink} />
               </View>
-              <View>
+              <View style={{ flex: 1, minWidth: 0 }}>
                 <Txt s={14} w={item.danger ? '700' : '600'} color={item.danger ? '#DC2626' : c.ink}>
                   {item.label}
                 </Txt>
@@ -396,7 +397,7 @@ export default function ProfileScreen({ onNavigate, onLogOut }: ProfileScreenPro
               </View>
 
               <Row style={{ gap: 10 }}>
-                <View style={{ flex: 1, gap: 4 }}>
+                <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
                   <Txt s={12} color={c.mute}>Current Weight (kg)</Txt>
                   <TextInput
                     value={editCurrentWeight}
@@ -404,10 +405,10 @@ export default function ProfileScreen({ onNavigate, onLogOut }: ProfileScreenPro
                     inputMode="decimal"
                     placeholder={`Current: ${currentWeight || 60} kg`}
                     placeholderTextColor="#94A3B8"
-                    style={{ borderWidth: 1, borderColor: c.line, borderRadius: 12, padding: 10, fontSize: 14, color: '#1E293B' }}
+                    style={{ borderWidth: 1, borderColor: c.line, borderRadius: 12, padding: 10, fontSize: 14, color: '#1E293B', minWidth: 0, width: '100%' }}
                   />
                 </View>
-                <View style={{ flex: 1, gap: 4 }}>
+                <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
                   <Txt s={12} color={c.mute}>Target Weight (kg)</Txt>
                   <TextInput
                     value={editTarget}
@@ -415,7 +416,7 @@ export default function ProfileScreen({ onNavigate, onLogOut }: ProfileScreenPro
                     inputMode="decimal"
                     placeholder={`Target: ${targetWeight || 55} kg`}
                     placeholderTextColor="#94A3B8"
-                    style={{ borderWidth: 1, borderColor: c.line, borderRadius: 12, padding: 10, fontSize: 14, color: '#1E293B' }}
+                    style={{ borderWidth: 1, borderColor: c.line, borderRadius: 12, padding: 10, fontSize: 14, color: '#1E293B', minWidth: 0, width: '100%' }}
                   />
                 </View>
               </Row>
@@ -428,12 +429,12 @@ export default function ProfileScreen({ onNavigate, onLogOut }: ProfileScreenPro
                   inputMode="numeric"
                   placeholder={`Target: ${calorieGoal} kcal`}
                   placeholderTextColor="#94A3B8"
-                  style={{ borderWidth: 1, borderColor: c.line, borderRadius: 12, padding: 10, fontSize: 14, color: '#1E293B' }}
+                  style={{ borderWidth: 1, borderColor: c.line, borderRadius: 12, padding: 10, fontSize: 14, color: '#1E293B', minWidth: 0 }}
                 />
               </View>
 
               <Row style={{ gap: 8 }}>
-                <View style={{ flex: 1, gap: 4 }}>
+                <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
                   <Txt s={11} color={c.mute}>Protein (g)</Txt>
                   <TextInput
                     value={editProtein}
@@ -441,10 +442,10 @@ export default function ProfileScreen({ onNavigate, onLogOut }: ProfileScreenPro
                     inputMode="numeric"
                     placeholder={`${proteinGoal}g`}
                     placeholderTextColor="#94A3B8"
-                    style={{ borderWidth: 1, borderColor: c.line, borderRadius: 10, padding: 8, fontSize: 13, color: '#1E293B' }}
+                    style={{ borderWidth: 1, borderColor: c.line, borderRadius: 10, padding: 8, fontSize: 13, color: '#1E293B', minWidth: 0, width: '100%' }}
                   />
                 </View>
-                <View style={{ flex: 1, gap: 4 }}>
+                <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
                   <Txt s={11} color={c.mute}>Carbs (g)</Txt>
                   <TextInput
                     value={editCarbs}
@@ -452,10 +453,10 @@ export default function ProfileScreen({ onNavigate, onLogOut }: ProfileScreenPro
                     inputMode="numeric"
                     placeholder={`${carbsGoal}g`}
                     placeholderTextColor="#94A3B8"
-                    style={{ borderWidth: 1, borderColor: c.line, borderRadius: 10, padding: 8, fontSize: 13, color: '#1E293B' }}
+                    style={{ borderWidth: 1, borderColor: c.line, borderRadius: 10, padding: 8, fontSize: 13, color: '#1E293B', minWidth: 0, width: '100%' }}
                   />
                 </View>
-                <View style={{ flex: 1, gap: 4 }}>
+                <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
                   <Txt s={11} color={c.mute}>Fat (g)</Txt>
                   <TextInput
                     value={editFat}
@@ -463,7 +464,7 @@ export default function ProfileScreen({ onNavigate, onLogOut }: ProfileScreenPro
                     inputMode="numeric"
                     placeholder={`${fatGoal}g`}
                     placeholderTextColor="#94A3B8"
-                    style={{ borderWidth: 1, borderColor: c.line, borderRadius: 10, padding: 8, fontSize: 13, color: '#1E293B' }}
+                    style={{ borderWidth: 1, borderColor: c.line, borderRadius: 10, padding: 8, fontSize: 13, color: '#1E293B', minWidth: 0, width: '100%' }}
                   />
                 </View>
               </Row>
@@ -519,21 +520,21 @@ export default function ProfileScreen({ onNavigate, onLogOut }: ProfileScreenPro
               <View style={{ gap: 10 }}>
                 <Txt s={13} w="700">Preferences</Txt>
 
-                <Row style={{ justifyContent: 'space-between', alignItems: 'center', paddingVertical: 4 }}>
-                  <View>
+                <Row style={{ justifyContent: 'space-between', alignItems: 'center', paddingVertical: 4, gap: 10 }}>
+                  <View style={{ flex: 1, minWidth: 0 }}>
                     <Txt s={13} w="600">Measurement Units</Txt>
                     <Txt s={11} color={c.mute}>{isMetric ? 'Metric (kg, cm)' : 'Imperial (lb, in)'}</Txt>
                   </View>
                   <Pressable
                     onPress={() => setIsMetric(!isMetric)}
-                    style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: c.yellow }}
+                    style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: c.yellow, flexShrink: 0 }}
                   >
                     <Txt s={12} w="700">{isMetric ? 'Metric' : 'Imperial'}</Txt>
                   </Pressable>
                 </Row>
 
-                <Row style={{ justifyContent: 'space-between', alignItems: 'center', paddingVertical: 4 }}>
-                  <View>
+                <Row style={{ justifyContent: 'space-between', alignItems: 'center', paddingVertical: 4, gap: 10 }}>
+                  <View style={{ flex: 1, minWidth: 0 }}>
                     <Txt s={13} w="600">Private Profile</Txt>
                     <Txt s={11} color={c.mute}>Hide from Discover and peer search</Txt>
                   </View>
@@ -543,8 +544,8 @@ export default function ProfileScreen({ onNavigate, onLogOut }: ProfileScreenPro
                   />
                 </Row>
 
-                <Row style={{ justifyContent: 'space-between', alignItems: 'center', paddingVertical: 4 }}>
-                  <View>
+                <Row style={{ justifyContent: 'space-between', alignItems: 'center', paddingVertical: 4, gap: 10 }}>
+                  <View style={{ flex: 1, minWidth: 0 }}>
                     <Txt s={13} w="600">Auto-Share Meals</Txt>
                     <Txt s={11} color={c.mute}>Share logged meal snaps with Circle</Txt>
                   </View>

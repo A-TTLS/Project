@@ -140,8 +140,10 @@ export const TwoToneCalorieRing = ({
   strokeWidth = 14,
   consumed = 0,
   goal = 2000,
-  trackColor = '#E0F2FE', // Soft light pastel track
-  progressColor = '#0284C7', // Rich dark active arc
+  trackColor = '#E0F2FE',
+  progressColor = '#0284C7',
+  overflowColor = '#BE123C',
+  pulseWhenFull = false,
   children,
 }: {
   size?: number;
@@ -150,15 +152,29 @@ export const TwoToneCalorieRing = ({
   goal?: number;
   trackColor?: string;
   progressColor?: string;
+  /** Darker second-lap arc color drawn when consumed exceeds 100% of goal */
+  overflowColor?: string;
+  /** Subtle glow pulse when goal is achieved or exceeded */
+  pulseWhenFull?: boolean;
   children?: ReactNode;
 }) => {
+  const [animateIn, setAnimateIn] = React.useState(false);
+
+  React.useEffect(() => {
+    const id = requestAnimationFrame(() => setAnimateIn(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
+
   const safeGoal = Math.max(1, goal || 2000);
   const safeConsumed = Math.max(0, consumed || 0);
-  const ratio = Math.min(1, safeConsumed / safeGoal);
+  const rawRatio = safeConsumed / safeGoal;
+  const baseRatio = animateIn ? Math.min(1, rawRatio) : 0;
+  const overflowRatio = animateIn && rawRatio > 1 ? Math.min(1, rawRatio - 1) : 0;
 
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
-  const strokeDashoffset = circumference - ratio * circumference;
+  const baseDashoffset = circumference - baseRatio * circumference;
+  const overflowDashoffset = circumference - overflowRatio * circumference;
 
   return (
     <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
@@ -166,9 +182,10 @@ export const TwoToneCalorieRing = ({
         width={size}
         height={size}
         viewBox={`0 0 ${size} ${size}`}
+        className={pulseWhenFull ? 'cs-ring-pulse' : undefined}
         style={{ transform: 'rotate(-90deg)', overflow: 'visible' }}
       >
-        {/* Unconsumed / Remaining Track (Background Ring) */}
+        {/* Background track ring */}
         <circle
           cx={size / 2}
           cy={size / 2}
@@ -177,8 +194,8 @@ export const TwoToneCalorieRing = ({
           strokeWidth={strokeWidth}
           fill="none"
         />
-        {/* Consumed / Intaked Progress (Active Fill Arc) */}
-        {ratio > 0 && (
+        {/* Primary progress arc (0% -> 100%) */}
+        {rawRatio > 0 && (
           <circle
             cx={size / 2}
             cy={size / 2}
@@ -186,17 +203,41 @@ export const TwoToneCalorieRing = ({
             stroke={progressColor}
             strokeWidth={strokeWidth}
             strokeDasharray={circumference}
-            strokeDashoffset={strokeDashoffset}
+            strokeDashoffset={baseDashoffset}
             strokeLinecap="round"
             fill="none"
             style={{
-              transition: 'stroke-dashoffset 0.4s ease-in-out',
+              transition: 'stroke-dashoffset 0.65s cubic-bezier(0.22, 1, 0.36, 1), stroke 0.3s ease',
+            }}
+          />
+        )}
+        {/* Overflow second-lap arc (>100%, e.g., 123% shows a 23% overflow lap) */}
+        {rawRatio > 1 && (
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            stroke={overflowColor}
+            strokeWidth={strokeWidth}
+            strokeDasharray={circumference}
+            strokeDashoffset={overflowDashoffset}
+            strokeLinecap="round"
+            fill="none"
+            style={{
+              transition: 'stroke-dashoffset 0.7s cubic-bezier(0.22, 1, 0.36, 1), stroke 0.3s ease',
             }}
           />
         )}
       </svg>
       {children ? (
-        <View style={{ position: 'absolute', alignItems: 'center', justifyContent: 'center' }}>
+        <View
+          style={{
+            position: 'absolute',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: size - strokeWidth * 2 - 14,
+          }}
+        >
           {children}
         </View>
       ) : null}
@@ -602,16 +643,16 @@ const st = StyleSheet.create({
   tabbar: {
     position: 'fixed' as any,
     maxWidth: 480,
-    left: 16,
-    right: 16,
+    left: 12,
+    right: 12,
     marginHorizontal: 'auto' as any,
-    bottom: 16,
-    height: 66,
+    bottom: 14,
+    height: 64,
     borderRadius: 9999,
     backgroundColor: 'rgba(255, 255, 255, 0.92)' as any,
     backdropFilter: 'blur(12px)' as any,
     WebkitBackdropFilter: 'blur(12px)' as any,
-    paddingHorizontal: 16,
+    paddingHorizontal: 10,
     borderWidth: 1,
     borderColor: 'rgba(226, 232, 240, 0.85)',
     justifyContent: 'space-between',

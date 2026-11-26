@@ -42,3 +42,123 @@
     color: #1E293B;
   }
 }
+
+/* ─── CalorieSnap Smooth UI Keyframes ─── */
+@keyframes cs-wave-front {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+@keyframes cs-wave-back {
+  0%   { transform: translateX(-50%); }
+  100% { transform: translateX(0); }
+}
+
+@keyframes cs-bubble-float {
+  0%   { transform: translateY(0) scale(0.85); opacity: 0; }
+  30%  { opacity: 0.65; }
+  100% { transform: translateY(-28px) scale(1.1); opacity: 0; }
+}
+
+@keyframes cs-runner-bob {
+  0%, 100% { transform: translateY(0px) rotate(-2deg); }
+  25%      { transform: translateY(-3.5px) rotate(2deg); }
+  50%      { transform: translateY(0px) rotate(-1deg); }
+  75%      { transform: translateY(-2.5px) rotate(2deg); }
+}
+
+@keyframes cs-runner-stride-front {
+  0%, 100% { transform: rotate(-22deg); }
+  50%      { transform: rotate(24deg); }
+}
+
+@keyframes cs-runner-stride-back {
+  0%, 100% { transform: rotate(24deg); }
+  50%      { transform: rotate(-22deg); }
+}
+
+@keyframes cs-runner-trail {
+  0%   { stroke-dashoffset: 0; opacity: 0.85; }
+  100% { stroke-dashoffset: 16; opacity: 0.35; }
+}
+
+@keyframes cs-ring-pulse {
+  0%, 100% { filter: drop-shadow(0 0 0px rgba(2, 132, 199, 0)); opacity: 1; }
+  50%      { filter: drop-shadow(0 0 7px rgba(225, 29, 72, 0.35)); opacity: 0.86; }
+}
+
+@keyframes cs-fade-in-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes cs-modal-pop {
+  from { opacity: 0; transform: scale(0.95) translateY(8px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.cs-wave-front {
+  animation: cs-wave-front 3.6s linear infinite;
+}
+
+.cs-wave-back {
+  animation: cs-wave-back 5.8s linear infinite;
+}
+
+.cs-bubble-1 {
+  animation: cs-bubble-float 3.2s ease-in infinite;
+}
+
+.cs-bubble-2 {
+  animation: cs-bubble-float 4.1s ease-in 1.3s infinite;
+}
+
+.cs-runner-bob {
+  animation: cs-runner-bob 0.72s ease-in-out infinite;
+  transform-box: view-box;
+  transform-origin: center;
+}
+
+.cs-runner-stride-a {
+  animation: cs-runner-stride-front 0.72s ease-in-out infinite;
+  transform-box: view-box;
+  transform-origin: 12px 13px;
+}
+
+.cs-runner-stride-b {
+  animation: cs-runner-stride-back 0.72s ease-in-out infinite;
+  transform-box: view-box;
+  transform-origin: 12px 13px;
+}
+
+.cs-runner-trail {
+  animation: cs-runner-trail 0.85s linear infinite;
+}
+
+.cs-ring-pulse {
+  animation: cs-ring-pulse 2s ease-in-out infinite;
+}
+
+.cs-fade-in-up {
+  animation: cs-fade-in-up 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.cs-modal-pop {
+  animation: cs-modal-pop 0.24s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cs-wave-front,
+  .cs-wave-back,
+  .cs-bubble-1,
+  .cs-bubble-2,
+  .cs-runner-bob,
+  .cs-runner-stride-a,
+  .cs-runner-stride-b,
+  .cs-runner-trail,
+  .cs-ring-pulse,
+  .cs-fade-in-up,
+  .cs-modal-pop {
+    animation: none !important;
+  }
+}

@@ -176,6 +176,7 @@ const styles = StyleSheet.create({
   },
   greetingCard: {
     flexDirection: "row",
+    flexWrap: "wrap",
     alignItems: "flex-start",
     justifyContent: "space-between",
     backgroundColor: colors.white,
@@ -187,6 +188,7 @@ const styles = StyleSheet.create({
   },
   greetingText: {
     flex: 1,
+    minWidth: 180,
     gap: 4,
   },
   hello: {

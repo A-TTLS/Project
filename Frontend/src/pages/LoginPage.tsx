@@ -27,6 +27,7 @@ export default function LoginPage({
 }: LoginPageProps) {
   const { width } = useWindowDimensions();
   const isWide = width >= 640;
+  const isCompact = width < 440;
   const { setCurrentUser, reloadUserData } = useApp();
 
   // Clean empty inputs - allowing the user to type their real info!
@@ -97,8 +98,8 @@ export default function LoginPage({
   };
 
   return (
-    <View style={styles.screen}>
-      <View style={[styles.card, isWide && styles.cardWide]}>
+    <View style={[styles.screen, isCompact && { padding: 12 }]}>
+      <View style={[styles.card, isWide && styles.cardWide, isCompact && { padding: 20, borderRadius: 22 }]}>
         {/* Header / Brand */}
         <View style={styles.header}>
           <Pressable
@@ -392,6 +393,7 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
+    minWidth: 1,
     fontSize: 14,
     color: colors.ink,
     outlineStyle: "none" as unknown as undefined,
