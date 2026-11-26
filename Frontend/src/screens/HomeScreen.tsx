@@ -1,7 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { View, Pressable, TextInput, ScrollView, Image } from 'react-native-web';
-import { useApp, WeightLogItem } from '../context/AppContext';
+
 import { loadLocalFoods, searchLocalFoods, LocalFood } from '../services/localFoodSearch';
+import { EditMealModal } from '../components/EditMealModal';
+import { DeleteConfirmModal } from '../components/DeleteConfirmModal';
+import { WaterIntakeCard } from '../components/WaterIntakeCard';
+import { StepCounterCard } from '../components/StepCounterCard';
+import { WeightTrendCard } from '../components/WeightTrendCard';
 import {
   Screen,
   Row,
@@ -148,9 +153,14 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
     workoutMins,
     todayMeals,
     addWater,
-    logWeight,
+
     logMeal,
+    updateMeal,
     deleteMeal,
+    currentWeight,
+    targetWeight,
+    weightLogs,
+    logWeight,
     setEditingMeal,
     setCapturedMeal,
     showToast,
@@ -165,6 +175,13 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
   const [localBurnedKcal, setLocalBurnedKcal] = useState<number>(0);
   const [workoutLabel, setWorkoutLabel] = useState<string>('Afternoon strength');
 
+  // Edit / Delete Meal Modal States
+  const [mealToEdit, setMealToEdit] = useState<MealItem | null>(null);
+  const [mealToDelete, setMealToDelete] = useState<MealItem | null>(null);
+
+  // Water undo — remembers the last quick-add amount so undo subtracts it.
+  // Undo stays pressable as long as there is any water logged today (waterMl > 0).
+  const [lastWaterAdded, setLastWaterAdded] = useState<number>(250);
   // Weight Modal State
   const [showWeightModal, setShowWeightModal] = useState(false);
   const [weightInputKg, setWeightInputKg] = useState('');
@@ -551,6 +568,21 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
         </View>
       </Card>
 
+      {/* Hydration & Steps Dashboard Widgets */}
+      <Row style={{ gap: 12, marginBottom: 16 }}>
+        <WaterIntakeCard
+          waterMl={waterMl}
+          targetMl={2000}
+          onAddWater={addWater}
+        />
+        <StepCounterCard
+          stepsCount={stepsCount}
+          goalSteps={8000}
+          workoutMins={workoutMins}
+          burnedKcal={burnedKcal}
+          onUpdateSteps={updateSteps}
+        />
+      </Row>
       {/* A Little Everyday Balance (2x2 Grid: Weight, Water, Steps, Workout) */}
       <View style={{ marginBottom: 18 }}>
         <Txt s={18} w="800" color="#1E293B" style={{ marginBottom: 12 }}>
@@ -820,6 +852,14 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
         </Row>
       </View>
 
+      {/* Weight Trend Graph */}
+      <WeightTrendCard
+        currentWeight={currentWeight}
+        targetWeight={targetWeight}
+        weightLogs={weightLogs}
+        onLogWeight={logWeight}
+      />
+
       {/* Today's Meals Section */}
       <SectionHead
         title="Today's Meals"
@@ -895,10 +935,17 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
                 </View>
               </Row>
 
-              <Row style={{ alignItems: 'center', gap: 8 }}>
+              <Row style={{ alignItems: 'center', gap: 6 }}>
                 <Txt s={15} w="800">{meal.kcal} <Txt s={11} color={c.mute}>kcal</Txt></Txt>
                 <Pressable
                   accessibilityLabel={`Edit ${meal.name}`}
+                  onPress={() => setMealToEdit(meal)}
+                  style={{
+                    padding: 6,
+                    borderRadius: 8,
+                    backgroundColor: '#F3F4F6',
+                    cursor: 'pointer',
+                  }}
                   onPress={() => {
                     setEditingMeal(meal);
                     setCapturedMeal(null);
@@ -906,13 +953,19 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
                   }}
                   style={{ padding: 4 }}
                 >
-                  <Icon name="edit" size={16} color={c.ink} />
+                  <Icon name="edit" size={15} color={c.ink} />
                 </Pressable>
                 <Pressable
-                  onPress={() => deleteMeal(meal.id)}
-                  style={{ padding: 4 }}
+                  accessibilityLabel={`Delete ${meal.name}`}
+                  onPress={() => setMealToDelete(meal)}
+                  style={{
+                    padding: 6,
+                    borderRadius: 8,
+                    backgroundColor: '#FEE2E2',
+                    cursor: 'pointer',
+                  }}
                 >
-                  <Icon name="trash" size={16} color="#C0504A" />
+                  <Icon name="trash" size={15} color="#DC2626" />
                 </Pressable>
               </Row>
             </Row>
@@ -1320,6 +1373,30 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
             </Btn>
           </View>
         </View>
+      )}
+
+      {/* Edit Meal Modal */}
+      {mealToEdit && (
+        <EditMealModal
+          meal={mealToEdit}
+          isOpen={!!mealToEdit}
+          onClose={() => setMealToEdit(null)}
+          onSave={async (fields) => {
+            await updateMeal(mealToEdit.id, fields);
+          }}
+        />
+      )}
+
+      {/* Delete Meal Confirmation Dialog */}
+      {mealToDelete && (
+        <DeleteConfirmModal
+          meal={mealToDelete}
+          isOpen={!!mealToDelete}
+          onClose={() => setMealToDelete(null)}
+          onConfirm={async (id) => {
+            await deleteMeal(id);
+          }}
+        />
       )}
     </Screen>
   );
