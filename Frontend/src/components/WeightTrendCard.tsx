@@ -10,7 +10,7 @@ import {
   ReferenceLine,
 } from 'recharts';
 import { type WeightLog } from '../services/weightService';
-import { Card, Row, Txt, Btn, Icon, c } from '../ui';
+import { Card, Row, Txt, Btn, Icon, ModalOverlay, c } from '../ui';
 
 interface WeightTrendCardProps {
   currentWeight: number;
@@ -287,21 +287,7 @@ export function WeightTrendCard({
       </Card>
 
       {/* Log Weight Modal */}
-      {showLogModal && (
-        <View
-          style={{
-            position: 'fixed' as any,
-            top: 0,
-            bottom: 0,
-            left: 0,
-            right: 0,
-            backgroundColor: 'rgba(0,0,0,0.65)',
-            justifyContent: 'center',
-            alignItems: 'center',
-            padding: 16,
-            zIndex: 1000,
-          }}
-        >
+      <ModalOverlay visible={showLogModal}>
           <View
             style={{
               width: '100%',
@@ -463,8 +449,7 @@ export function WeightTrendCard({
               </Btn>
             </Row>
           </View>
-        </View>
-      )}
+      </ModalOverlay>
     </>
   );
 }

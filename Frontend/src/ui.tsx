@@ -1,6 +1,7 @@
 import { Icon, legacyAssets as assets, type IconName } from './components/Icons';
 export { assets, type IconName, Icon };
 import React, { type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import {
   Image,
   Pressable,
@@ -768,3 +769,32 @@ const st = StyleSheet.create({
     lineHeight: 17.4,
   },
 });
+
+export const ModalOverlay = ({
+  visible,
+  children,
+  zIndex = 9999,
+}: {
+  visible: boolean;
+  children: ReactNode;
+  zIndex?: number;
+}) => {
+  if (!visible) return null;
+  const overlay = (
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        backgroundColor: 'rgba(15, 23, 42, 0.6)',
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 14,
+        zIndex,
+      }}
+    >
+      {children}
+    </div>
+  );
+  return typeof document !== 'undefined' ? createPortal(overlay, document.body) : overlay;
+};
