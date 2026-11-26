@@ -128,7 +128,7 @@ export function WeightTrendCard({
     <>
       <Card style={{ padding: 16, marginBottom: 16 }}>
         {/* Header & Timeframe Pills */}
-        <Row style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+        <Row style={{ justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
           <Row style={{ alignItems: 'center', gap: 8 }}>
             <View
               style={{
@@ -138,6 +138,7 @@ export function WeightTrendCard({
                 backgroundColor: '#FFEFA0',
                 alignItems: 'center',
                 justifyContent: 'center',
+                flexShrink: 0,
               }}
             >
               <Icon name="scale" size={16} color={c.ink} />
@@ -145,7 +146,7 @@ export function WeightTrendCard({
             <Txt s={15} w="800">Weight Trend</Txt>
           </Row>
 
-          <Row style={{ gap: 4, backgroundColor: c.bg, padding: 3, borderRadius: 10 }}>
+          <Row style={{ gap: 4, backgroundColor: c.bg, padding: 3, borderRadius: 10, flexShrink: 0 }}>
             {(['7D', '30D', 'All'] as const).map((tf) => {
               const active = timeframe === tf;
               return (
@@ -170,8 +171,8 @@ export function WeightTrendCard({
         </Row>
 
         {/* Current Weight, Net Change & Quick Log Button */}
-        <Row style={{ justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 12, marginBottom: 12 }}>
-          <View>
+        <Row style={{ justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 8, marginTop: 12, marginBottom: 12 }}>
+          <View style={{ flex: 1, minWidth: 160 }}>
             <Row style={{ alignItems: 'baseline', gap: 6 }}>
               <Txt s={28} w="800">
                 {currentWeight || '--'}
@@ -369,16 +370,19 @@ export function WeightTrendCard({
                   onChangeText={setInputWeight}
                   inputMode="decimal"
                   placeholder="65.0"
+                  placeholderTextColor="#94A3B8"
                   style={{
                     flex: 1,
+                    minWidth: 0,
                     height: 44,
                     borderWidth: 1,
                     borderColor: c.line,
                     borderRadius: 10,
                     textAlign: 'center',
-                    fontSize: 20,
+                    fontSize: 18,
                     fontWeight: '800',
                     backgroundColor: '#FFFFFF',
+                    color: '#1E293B',
                   }}
                 />
 
