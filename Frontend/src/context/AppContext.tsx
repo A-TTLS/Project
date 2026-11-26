@@ -2,7 +2,6 @@ import React, { createContext, useContext, useState, useEffect, type ReactNode }
 import { supabase, isSupabaseConfigured } from '../services/supabaseClient';
 import { authService } from '../services/authService';
 import type { VisionRecognitionResult } from '../services/visionService';
-import { weightService, type WeightLog } from '../services/weightService';
 
 export interface CapturedMeal {
   name: string;
@@ -131,18 +130,12 @@ interface AppContextType {
   editingMeal: MealItem | null;
   setEditingMeal: (meal: MealItem | null) => void;
   addWater: (amount?: number) => void;
-  updateSteps: (steps: number) => Promise<void>;
+  addSteps: (amount?: number) => Promise<void>;
+  logWeight: (weightKg: number, note?: string) => Promise<void>;
   logWorkout: (minutes: number, kcalBurned: number, label?: string) => Promise<void>;
-
   logMeal: (meal: Omit<MealItem, 'id' | 'logged'>) => Promise<void>;
-  updateMeal: (id: string, updatedFields: Partial<MealItem>) => Promise<{ success: boolean; error?: string }>;
-  deleteMeal: (id: string) => Promise<{ success: boolean; error?: string }>;
-
-  // Weight Tracking & History
-  weightLogs: WeightLog[];
-  fetchWeightLogs: (timeframe?: '7D' | '30D' | 'All') => Promise<WeightLog[]>;
-  logWeight: (weightKg: number, note?: string) => Promise<{ success: boolean; data?: WeightLog; error?: string }>;
-  deleteWeightLog: (id: string) => Promise<{ success: boolean; error?: string }>;
+  updateMeal: (id: string, updatedFields: Partial<Omit<MealItem, 'id' | 'logged'>>) => Promise<void>;
+  deleteMeal: (id: string) => Promise<void>;
 
   // Rewards & Missions
   claimedVouchers: ClaimedVoucher[];
@@ -311,7 +304,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [stepsCount, setStepsCount] = useState<number>(initialDay.steps);
   const [workoutMins, setWorkoutMins] = useState<number>(initialDay.workout);
   const [workoutLabel, setWorkoutLabel] = useState<string>(initialDay.workoutLabel);
-  const [weightLogs, setWeightLogs] = useState<WeightLog[]>([]);
 
   // Toast
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -554,18 +546,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
         .maybeSingle();
 
       if (metrics) {
-        setWaterMl(metrics.water_ml ?? 0);
-        setStepsCount(metrics.steps_count ?? 0);
-        setWorkoutMins(metrics.workout_minutes ?? 0);
-        setBurnedKcal(metrics.workout_calories_burned ?? 0);
-        if (metrics.workout_label) setWorkoutLabel(metrics.workout_label);
+        const wVal = metrics.water_ml ?? 0;
+        const sVal = metrics.steps_count ?? 0;
+        const wkVal = metrics.workout_minutes ?? 0;
+        const bVal = metrics.workout_calories_burned ?? 0;
+        const lblVal = metrics.workout_label || 'Afternoon strength';
+
+        setWaterMl(wVal);
+        setStepsCount(sVal);
+        setWorkoutMins(wkVal);
+        setBurnedKcal(bVal);
+        setWorkoutLabel(lblVal);
+
         try {
           localStorage.setItem('caloriesnap_today_metrics', JSON.stringify({
-            water: metrics.water_ml ?? 0,
-            steps: metrics.steps_count ?? 0,
-            workout: metrics.workout_minutes ?? 0,
-            burned: metrics.workout_calories_burned ?? 0,
-            workoutLabel: metrics.workout_label || 'Afternoon strength',
+            water: wVal,
+            steps: sVal,
+            workout: wkVal,
+            burned: bVal,
+            workoutLabel: lblVal,
           }));
         } catch {}
       } else {
@@ -654,14 +653,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       // 4. Fetch All Public Posts
       await fetchPublicPosts(user.id);
-
-      // 5. Fetch Weight Tracking History
-      try {
-        const logs = await weightService.fetchWeightLogs(user.id, 'All');
-        setWeightLogs(logs);
-      } catch (err) {
-        console.warn('Failed to load weight logs from Supabase:', err);
-      }
     } catch (err) {
       console.warn('Failed to load user data from Supabase:', err);
     }
@@ -824,7 +815,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  // Water Hydration Action (+250ml)
+  // Water Hydration Action (+250ml or undo delta)
   const addWater = async (amount = 250) => {
     const newWater = Math.max(0, waterMl + amount);
     setWaterMl(newWater);
@@ -844,6 +835,112 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }, { onConflict: 'user_id,metric_date' });
       } catch (err) {
         console.warn('Failed to persist water to Supabase:', err);
+      }
+    }
+  };
+
+  // Steps Action (+steps, persisted to localStorage and Supabase daily_metrics)
+  const addSteps = async (amount = 1000) => {
+    const cleanAmount = Math.round(Number(amount) || 0);
+    if (cleanAmount <= 0) return;
+
+    const newSteps = Math.max(0, stepsCount + cleanAmount);
+    setStepsCount(newSteps);
+
+    try {
+      const prevMetrics = JSON.parse(localStorage.getItem('caloriesnap_today_metrics') || '{}');
+      localStorage.setItem(
+        'caloriesnap_today_metrics',
+        JSON.stringify({ ...prevMetrics, steps: newSteps })
+      );
+    } catch {}
+
+    showToast(`👟 +${cleanAmount.toLocaleString()} steps logged (${newSteps.toLocaleString()} total)`);
+
+    if (isSupabaseConfigured && userId) {
+      try {
+        const todayStr = getLocalYYYYMMDD();
+        await supabase.from('daily_metrics').upsert(
+          {
+            user_id: userId,
+            metric_date: todayStr,
+            steps_count: newSteps,
+          },
+          { onConflict: 'user_id,metric_date' }
+        );
+      } catch (err) {
+        console.warn('Failed to persist steps to Supabase:', err);
+      }
+    }
+  };
+
+  // Log Weight Action (updates currentWeight, BMI, weightHistory, and Supabase weight_logs)
+  const logWeight = async (weightKg: number, note?: string) => {
+    const cleanWeight = Math.round(Number(weightKg) * 10) / 10;
+    if (!cleanWeight || cleanWeight <= 0) return;
+
+    const tempId = `w_${Date.now()}`;
+    const newEntry: WeightLogItem = {
+      id: tempId,
+      weightKg: cleanWeight,
+      recordedAt: new Date().toISOString(),
+      note: note?.trim() || null,
+    };
+
+    setCurrentWeight(cleanWeight);
+    const hM = (userHeightCm || 165) / 100;
+    const calculatedBmi = Math.round((cleanWeight / (hM * hM)) * 10) / 10;
+    if (calculatedBmi > 10 && calculatedBmi < 60) setBmi(calculatedBmi);
+
+    setWeightHistory((prev) => {
+      const updated = [...prev, newEntry];
+      try {
+        localStorage.setItem('caloriesnap_weight_history', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+
+    try {
+      const prevCache = JSON.parse(localStorage.getItem('caloriesnap_profile_cache') || '{}');
+      localStorage.setItem(
+        'caloriesnap_profile_cache',
+        JSON.stringify({ ...prevCache, currentWeight: cleanWeight, current_weight_kg: cleanWeight })
+      );
+    } catch {}
+
+    showToast(`⚖️ Weight updated to ${cleanWeight.toFixed(1)} kg`);
+
+    if (isSupabaseConfigured && userId) {
+      try {
+        const { data, error } = await supabase
+          .from('weight_logs')
+          .insert({
+            user_id: userId,
+            weight_kg: cleanWeight,
+            note: note?.trim() || null,
+            recorded_at: newEntry.recordedAt,
+          })
+          .select()
+          .single();
+
+        if (!error && data) {
+          setWeightHistory((prev) => {
+            const updated = prev.map((item) =>
+              item.id === tempId ? { ...item, id: data.id } : item
+            );
+            try {
+              localStorage.setItem('caloriesnap_weight_history', JSON.stringify(updated));
+            } catch {}
+            return updated;
+          });
+        }
+
+        await supabase
+          .from('profiles')
+          .update({ current_weight_kg: cleanWeight, updated_at: new Date().toISOString() })
+          .eq('id', userId);
+      } catch (err) {
+        console.warn('Failed to save weight log to Supabase:', err);
       }
     }
   };
@@ -971,32 +1068,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Update Steps Action
-  const updateSteps = async (steps: number) => {
-    const cleanSteps = Math.max(0, Math.round(steps));
-    setStepsCount(cleanSteps);
-    try {
-      const prevMetrics = JSON.parse(localStorage.getItem('caloriesnap_today_metrics') || '{}');
-      localStorage.setItem('caloriesnap_today_metrics', JSON.stringify({ ...prevMetrics, steps: cleanSteps }));
-    } catch {}
-    showToast(`👟 Steps updated: ${cleanSteps.toLocaleString()} steps`);
-
-    if (isSupabaseConfigured && userId) {
-      try {
-        const todayStr = getLocalYYYYMMDD();
-        await supabase.from('daily_metrics').upsert({
-          user_id: userId,
-          metric_date: todayStr,
-          steps_count: cleanSteps,
-        }, { onConflict: 'user_id,metric_date' });
-      } catch (err) {
-        console.warn('Failed to persist steps to Supabase:', err);
-      }
-    }
-  };
-
   // Delete Meal Action
-  const deleteMeal = async (id: string): Promise<{ success: boolean; error?: string }> => {
+  const deleteMeal = async (id: string) => {
     setTodayMeals((prev) => {
       const updated = prev.filter((m) => m.id !== id);
       try {
@@ -1004,124 +1077,37 @@ export function AppProvider({ children }: { children: ReactNode }) {
       } catch {}
       return updated;
     });
-    showToast('Meal removed from diary.');
+    showToast('Meal removed from today.');
 
     if (isSupabaseConfigured && userId && !id.startsWith('m_')) {
       try {
-        const { error } = await supabase.from('meals').delete().eq('id', id).eq('user_id', userId);
-        if (error) {
-          console.warn('Supabase meal delete error:', error.message);
-          return { success: false, error: error.message };
-        }
-      } catch (err: any) {
+        await supabase.from('meals').delete().eq('id', id);
+      } catch (err) {
         console.warn('Failed to delete meal in Supabase:', err);
-        return { success: false, error: err?.message };
       }
     }
-    return { success: true };
   };
 
-  const updateMeal = async (id: string, updatedFields: Partial<MealItem>): Promise<{ success: boolean; error?: string }> => {
+  const updateMeal = async (id: string, updatedFields: Partial<Omit<MealItem, 'id' | 'logged'>>) => {
     const existing = todayMeals.find((meal) => meal.id === id);
-    if (!existing) return { success: false, error: 'Meal not found' };
-    const updatedMeal: MealItem = {
-      ...existing,
-      ...updatedFields,
-      id: existing.id,
-      logged: existing.logged,
-      imageUrl: updatedFields.imageUrl || updatedFields.image || existing.imageUrl || existing.image,
-    };
+    if (!existing) return;
+    const updatedMeal = { ...existing, ...updatedFields, id: existing.id, logged: existing.logged };
     setTodayMeals((prev) => {
       const updated = prev.map((meal) => meal.id === id ? updatedMeal : meal);
       try { localStorage.setItem('caloriesnap_today_meals', JSON.stringify(updated)); } catch {}
       return updated;
     });
-
     if (isSupabaseConfigured && userId && !id.startsWith('m_')) {
       try {
         const { error } = await supabase.from('meals').update({
-          name: updatedMeal.name,
-          category: updatedMeal.category,
-          calories: Math.round(updatedMeal.kcal),
-          protein_g: Number(updatedMeal.protein) || 0,
-          carbs_g: Number(updatedMeal.carbs) || 0,
-          fat_g: Number(updatedMeal.fat) || 0,
-          portion_multiplier: updatedMeal.portionMultiplier ?? 1.0,
-          image_url: updatedMeal.imageUrl || null,
+          name: updatedMeal.name, category: updatedMeal.category, calories: Math.round(updatedMeal.kcal),
+          protein_g: Number(updatedMeal.protein) || 0, carbs_g: Number(updatedMeal.carbs) || 0,
+          fat_g: Number(updatedMeal.fat) || 0, image_url: updatedMeal.imageUrl || updatedMeal.image || null,
         }).eq('id', id).eq('user_id', userId);
-
-        if (error) {
-          console.warn('Supabase meal update error:', error.message);
-          showToast(`⚠️ Saved locally (cloud sync: ${error.message})`);
-          return { success: false, error: error.message };
-        }
-      } catch (error: any) {
-        console.warn('Failed to update meal in Supabase:', error);
-        return { success: false, error: error?.message };
-      }
+        if (error) console.warn('Supabase meal update error:', error.message);
+      } catch (error) { console.warn('Failed to update meal in Supabase:', error); }
     }
-    showToast(`🥗 Updated "${updatedMeal.name}" (${updatedMeal.kcal} kcal)`);
-    return { success: true };
-  };
-
-  // Weight Tracking Actions
-  const fetchWeightLogs = async (timeframe: '7D' | '30D' | 'All' = '7D') => {
-    if (!userId) return weightLogs;
-    const logs = await weightService.fetchWeightLogs(userId, timeframe);
-    setWeightLogs(logs);
-    return logs;
-  };
-
-  const logWeight = async (weightKg: number, note?: string) => {
-    const rounded = Math.round(weightKg * 10) / 10;
-    setCurrentWeight(rounded);
-    const hM = (userHeightCm || 165) / 100;
-    const calculatedBmi = Math.round((rounded / (hM * hM)) * 10) / 10;
-    if (calculatedBmi > 10 && calculatedBmi < 60) setBmi(calculatedBmi);
-
-    try {
-      const prevCache = JSON.parse(localStorage.getItem('caloriesnap_profile_cache') || '{}');
-      localStorage.setItem(
-        'caloriesnap_profile_cache',
-        JSON.stringify({ ...prevCache, currentWeight: rounded, current_weight_kg: rounded })
-      );
-    } catch {}
-
-    const res = await weightService.logWeight(userId || 'local_user', rounded, note);
-    if (res.success && res.data) {
-      setWeightLogs((prev) => {
-        const withoutOld = prev.filter((l) => l.id !== res.data!.id);
-        return [...withoutOld, res.data!].sort(
-          (a, b) => new Date(a.recorded_at).getTime() - new Date(b.recorded_at).getTime()
-        );
-      });
-      setWeightHistory((prev) => {
-        const nextEntry: WeightLogItem = {
-          id: res.data!.id,
-          weightKg: rounded,
-          recordedAt: res.data!.recorded_at,
-          note: note?.trim() || null,
-        };
-        const updated = [...prev, nextEntry];
-        try {
-          localStorage.setItem('caloriesnap_weight_history', JSON.stringify(updated));
-        } catch {}
-        return updated;
-      });
-      showToast(`⚖️ Weight logged: ${rounded} kg`);
-    } else {
-      showToast(`⚖️ Weight logged: ${rounded} kg (local)`);
-    }
-    return res;
-  };
-
-  const deleteWeightLog = async (id: string) => {
-    const success = await weightService.deleteWeightLog(id, userId || '');
-    if (success) {
-      setWeightLogs((prev) => prev.filter((l) => l.id !== id));
-      showToast('Weight log deleted.');
-    }
-    return { success };
+    showToast(`Updated "${updatedMeal.name}".`);
   };
 
   // Profile Update Action
@@ -1354,17 +1340,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         editingMeal,
         setEditingMeal,
         addWater,
-        updateSteps,
+        addSteps,
+        logWeight,
         logWorkout,
-
         logMeal,
         updateMeal,
         deleteMeal,
-
-        weightLogs,
-        fetchWeightLogs,
-        logWeight,
-        deleteWeightLog,
 
         claimedVouchers,
         availableVouchers,
