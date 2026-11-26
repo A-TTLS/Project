@@ -25,6 +25,7 @@ import {
   Btn,
   TwoToneCalorieRing,
   Icon,
+  ModalOverlay,
   c,
 } from '../ui';
 
@@ -106,6 +107,69 @@ function getMealEmoji(name: string, category: string): string {
     case 'Snacks': return '🍎';
     default: return '🥗';
   }
+}
+
+/**
+ * Animated Athlete Lifting Dumbbells SVG for Workout Card
+ */
+function AnimatedWorkoutIcon({ active }: { active: boolean }) {
+  const dur = active ? '0.85s' : '1.45s';
+  return (
+    <View
+      style={{
+        width: 36,
+        height: 36,
+        borderRadius: 12,
+        backgroundColor: '#FFFFFF',
+        borderWidth: 1,
+        borderColor: '#FECDD3',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexShrink: 0,
+      }}
+    >
+      <svg
+        width="26"
+        height="26"
+        viewBox="0 0 28 28"
+        fill="none"
+        style={{ overflow: 'visible' }}
+      >
+        {/* Subtle peak energy sparks */}
+        <g className="cs-workout-spark" style={{ animationDuration: dur }}>
+          <line x1="14" y1="1.8" x2="14" y2="4" stroke="#E11D48" strokeWidth="1.5" strokeLinecap="round" />
+          <line x1="10.2" y1="3.2" x2="11.5" y2="4.9" stroke="#FB7185" strokeWidth="1.4" strokeLinecap="round" />
+          <line x1="17.8" y1="3.2" x2="16.5" y2="4.9" stroke="#FB7185" strokeWidth="1.4" strokeLinecap="round" />
+        </g>
+
+        {/* Torso & head with gentle press brace */}
+        <g className="cs-workout-torso" style={{ animationDuration: dur }}>
+          <circle cx="14" cy="14" r="2.3" fill="#7F1D1D" />
+          <path d="M10.2 18.2 C10.2 16.5, 17.8 16.5, 17.8 18.2 L17.1 24.5 L10.9 24.5 Z" fill="#9F1239" />
+          <path d="M10.4 18 L6.2 15.5" stroke="#9F1239" strokeWidth="2.1" strokeLinecap="round" />
+          <path d="M17.6 18 L21.8 15.5" stroke="#9F1239" strokeWidth="2.1" strokeLinecap="round" />
+        </g>
+
+        {/* Forearms synced with dumbbell press height */}
+        <g className="cs-workout-arm" style={{ transformOrigin: '6.2px 15.5px', animationDuration: dur }}>
+          <line x1="6.2" y1="15.5" x2="6.2" y2="9.5" stroke="#7F1D1D" strokeWidth="2.1" strokeLinecap="round" />
+        </g>
+        <g className="cs-workout-arm" style={{ transformOrigin: '21.8px 15.5px', animationDuration: dur }}>
+          <line x1="21.8" y1="15.5" x2="21.8" y2="9.5" stroke="#7F1D1D" strokeWidth="2.1" strokeLinecap="round" />
+        </g>
+
+        {/* Dumbbells pressing up and down */}
+        <g className="cs-workout-lift" style={{ animationDuration: dur }}>
+          <line x1="2.9" y1="9.5" x2="9.5" y2="9.5" stroke="#5C362C" strokeWidth="1.8" strokeLinecap="round" />
+          <rect x="2.1" y="7.1" width="1.9" height="4.8" rx="0.8" fill="#E11D48" />
+          <rect x="8.4" y="7.1" width="1.9" height="4.8" rx="0.8" fill="#E11D48" />
+          <line x1="18.5" y1="9.5" x2="25.1" y2="9.5" stroke="#5C362C" strokeWidth="1.8" strokeLinecap="round" />
+          <rect x="17.7" y="7.1" width="1.9" height="4.8" rx="0.8" fill="#E11D48" />
+          <rect x="24" y="7.1" width="1.9" height="4.8" rx="0.8" fill="#E11D48" />
+        </g>
+      </svg>
+    </View>
+  );
 }
 
 export default function HomeScreen({ onNavigate }: HomeScreenProps) {
@@ -740,19 +804,7 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
       >
         <Row style={{ justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           <Row style={{ alignItems: 'center', gap: 10, flex: 1, minWidth: 160 }}>
-            <View
-              style={{
-                width: 36,
-                height: 36,
-                borderRadius: 12,
-                backgroundColor: '#FFFFFF',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0,
-              }}
-            >
-              <Txt s={18}>🏋️</Txt>
-            </View>
+            <AnimatedWorkoutIcon active={workoutMins > 0 || safeBurned > 0} />
             <View style={{ flex: 1, minWidth: 0 }}>
               <Txt s={12} w="700" color="#5C362C">
                 Workout · {savedWorkoutLabel || 'Afternoon strength'}
@@ -786,6 +838,28 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
             <Txt s={11} w="800" color="#5C362C">Log Workout</Txt>
           </Pressable>
         </Row>
+
+        {stepsCount > 0 && (
+          <Row
+            style={{
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: 6,
+              marginTop: 10,
+              paddingTop: 8,
+              borderTopWidth: 1,
+              borderColor: '#FECDD3',
+            }}
+          >
+            <Txt s={11} color="#7C2D12" w="600">
+              Daily Active Burn (Steps + Workout)
+            </Txt>
+            <Txt s={12} color="#5C362C" w="800">
+              {(safeBurned + Math.round(stepsCount * 0.04)).toLocaleString()} kcal
+            </Txt>
+          </Row>
+        )}
       </Card>
 
       {/* ─── Weight Trend Graph (PR #14) ─── */}
@@ -938,8 +1012,7 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
       </View>
 
       {/* ─── Quick Log Workout Modal (PR #11) ─── */}
-      {showWorkoutModal && (
-        <View style={{ position: 'fixed' as any, top: 0, bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(15, 23, 42, 0.6)', justifyContent: 'center', alignItems: 'center', padding: 14, zIndex: 999 }}>
+      <ModalOverlay visible={showWorkoutModal}>
           <div
             className="cs-modal-pop"
             style={{
@@ -1031,12 +1104,10 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
               </Btn>
             </ScrollView>
           </div>
-        </View>
-      )}
+      </ModalOverlay>
 
       {/* ─── Manual Add Meal Modal ─── */}
-      {showAddMealModal && (
-        <View style={{ position: 'fixed' as any, top: 0, bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(15, 23, 42, 0.6)', justifyContent: 'center', alignItems: 'center', padding: 14, zIndex: 999 }}>
+      <ModalOverlay visible={showAddMealModal}>
           <div
             className="cs-modal-pop"
             style={{
@@ -1181,12 +1252,10 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
               </Btn>
             </ScrollView>
           </div>
-        </View>
-      )}
+      </ModalOverlay>
 
       {/* ─── Manual Target Setting Modal (SCRUM-15: Set Own Target Manually) ─── */}
-      {showTargetModal && (
-        <View style={{ position: 'fixed' as any, top: 0, bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(15, 23, 42, 0.6)', justifyContent: 'center', alignItems: 'center', padding: 14, zIndex: 9999 }}>
+      <ModalOverlay visible={showTargetModal}>
           <div
             className="cs-modal-pop"
             style={{
@@ -1359,8 +1428,7 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
               </Btn>
             </ScrollView>
           </div>
-        </View>
-      )}
+      </ModalOverlay>
 
       {/* ─── Edit Meal Modal (PR #14) ─── */}
       {mealToEdit && (
