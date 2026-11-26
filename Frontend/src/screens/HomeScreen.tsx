@@ -31,8 +31,8 @@ const QUICK_WORKOUT_TYPES = [
 ];
 
 /**
- * Estimates kcal/min based on workout type + user weight (falls back cleanly if weight is missing)
- * Uses MET-style rates: kcal = MET * weightKg * (minutes / 60)
+ * Estimates kcal burned from minutes + workout type + current weight (kg).
+ * Formula: kcal = MET * weightKg * (minutes / 60)
  */
 function estimateWorkoutCalories(minutes: number, workoutType: string, weightKg = 55): number {
   const mins = Math.max(0, Number(minutes) || 0);
@@ -41,7 +41,7 @@ function estimateWorkoutCalories(minutes: number, workoutType: string, weightKg 
   const label = (workoutType || '').toLowerCase();
   const safeWeight = Number(weightKg) > 0 ? Number(weightKg) : 55;
 
-  let met = 4.0; // default moderate activity
+  let met = 4.0;
   if (label.includes('push') || label.includes('strength') || label.includes('gym') || label.includes('weight')) {
     met = 4.5;
   } else if (label.includes('cycl') || label.includes('bike') || label.includes('spin')) {
@@ -126,7 +126,6 @@ function buildRealWeightSparkline(logs: WeightLogItem[], width = 120, height = 4
 }
 
 export default function HomeScreen({ onNavigate }: HomeScreenProps) {
-  const appContext = useApp() as any;
   const {
     userName,
     streakDays,
@@ -146,24 +145,28 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
     waterMl,
     stepsCount,
     workoutMins,
+    workoutLabel: contextWorkoutLabel,
     todayMeals,
     addWater,
+    addSteps,
     logWeight,
+    logWorkout,
     logMeal,
     deleteMeal,
     setEditingMeal,
     setCapturedMeal,
     showToast,
-  } = appContext;
+  } = useApp();
 
-  const logWorkoutFn: ((mins: number, kcal: number, label?: string) => Promise<void> | void) | undefined =
-    appContext.logWorkout;
-
+  // Water history stack for reliable Undo (Ctrl+Z style)
   const [waterHistory, setWaterHistory] = useState<number[]>([]);
-  const [localSteps, setLocalSteps] = useState<number>(0);
-  const [localWorkoutMins, setLocalWorkoutMins] = useState<number>(0);
-  const [localBurnedKcal, setLocalBurnedKcal] = useState<number>(0);
-  const [workoutLabel, setWorkoutLabel] = useState<string>('Afternoon strength');
+  const [workoutLabel, setWorkoutLabel] = useState<string>(contextWorkoutLabel || 'Afternoon strength');
+
+  useEffect(() => {
+    if (contextWorkoutLabel) {
+      setWorkoutLabel(contextWorkoutLabel);
+    }
+  }, [contextWorkoutLabel]);
 
   // Weight Modal State
   const [showWeightModal, setShowWeightModal] = useState(false);
@@ -211,20 +214,17 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
       showToast('⚠️ Please enter a valid weight in kg');
       return;
     }
-    if (logWeight) {
-      await logWeight(parsed, weightInputNote);
-    }
+    await logWeight(parsed, weightInputNote);
     setShowWeightModal(false);
   };
 
-  const handleSaveSteps = () => {
+  const handleSaveSteps = async () => {
     const added = Math.max(0, parseInt(stepsInput, 10) || 0);
     if (added <= 0) {
       showToast('⚠️ Please enter steps greater than 0');
       return;
     }
-    setLocalSteps((prev) => prev + added);
-    showToast(`👟 Added ${added.toLocaleString()} steps`);
+    await addSteps(added);
     setShowStepsModal(false);
   };
 
@@ -267,14 +267,7 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
     }
 
     setWorkoutLabel(label);
-    if (logWorkoutFn) {
-      await logWorkoutFn(mins, kcal, label);
-    } else {
-      setLocalWorkoutMins((m) => m + mins);
-      setLocalBurnedKcal((k) => k + kcal);
-      showToast(`💪 Logged ${mins}m (${kcal} kcal burned)`);
-    }
-
+    await logWorkout(mins, kcal, label);
     setKcalManuallyEdited(false);
     setShowWorkoutModal(false);
   };
@@ -331,8 +324,8 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
     setShowSuggestions(false);
   };
 
-  const displayWorkoutMins = (Number(workoutMins) || 0) + localWorkoutMins;
-  const displayBurnedKcal = (Number(burnedKcal) || 0) + localBurnedKcal;
+  const displayWorkoutMins = Math.max(0, Number(workoutMins) || 0);
+  const displayBurnedKcal = Math.max(0, Number(burnedKcal) || 0);
 
   const safeGoal = Math.max(1, Number(calorieGoal) || 2000);
   const safeConsumed = Math.max(0, Number(consumedKcal) || 0);
@@ -359,7 +352,7 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
     Math.max(0, Math.floor(safeWaterMl / (waterGoalMl / waterSegments)))
   );
 
-  const safeSteps = Math.max(0, (Number(stepsCount) || 0) + localSteps);
+  const safeSteps = Math.max(0, Number(stepsCount) || 0);
   const stepsGoal = 10000;
   const stepsRatio = Math.min(1, safeSteps / stepsGoal);
   const ringRadius = 22;

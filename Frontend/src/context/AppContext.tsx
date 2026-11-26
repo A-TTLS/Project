@@ -130,6 +130,7 @@ interface AppContextType {
   editingMeal: MealItem | null;
   setEditingMeal: (meal: MealItem | null) => void;
   addWater: (amount?: number) => void;
+  addSteps: (amount?: number) => Promise<void>;
   logWeight: (weightKg: number, note?: string) => Promise<void>;
   logWorkout: (minutes: number, kcalBurned: number, label?: string) => Promise<void>;
   logMeal: (meal: Omit<MealItem, 'id' | 'logged'>) => Promise<void>;
@@ -545,18 +546,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
         .maybeSingle();
 
       if (metrics) {
-        setWaterMl(metrics.water_ml ?? 0);
-        setStepsCount(metrics.steps_count ?? 0);
-        setWorkoutMins(metrics.workout_minutes ?? 0);
-        setBurnedKcal(metrics.workout_calories_burned ?? 0);
-        if (metrics.workout_label) setWorkoutLabel(metrics.workout_label);
+        const wVal = metrics.water_ml ?? 0;
+        const sVal = metrics.steps_count ?? 0;
+        const wkVal = metrics.workout_minutes ?? 0;
+        const bVal = metrics.workout_calories_burned ?? 0;
+        const lblVal = metrics.workout_label || 'Afternoon strength';
+
+        setWaterMl(wVal);
+        setStepsCount(sVal);
+        setWorkoutMins(wkVal);
+        setBurnedKcal(bVal);
+        setWorkoutLabel(lblVal);
+
         try {
           localStorage.setItem('caloriesnap_today_metrics', JSON.stringify({
-            water: metrics.water_ml ?? 0,
-            steps: metrics.steps_count ?? 0,
-            workout: metrics.workout_minutes ?? 0,
-            burned: metrics.workout_calories_burned ?? 0,
-            workoutLabel: metrics.workout_label || 'Afternoon strength',
+            water: wVal,
+            steps: sVal,
+            workout: wkVal,
+            burned: bVal,
+            workoutLabel: lblVal,
           }));
         } catch {}
       } else {
@@ -807,7 +815,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  // Water Hydration Action (+250ml)
+  // Water Hydration Action (+250ml or undo delta)
   const addWater = async (amount = 250) => {
     const newWater = Math.max(0, waterMl + amount);
     setWaterMl(newWater);
@@ -827,6 +835,41 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }, { onConflict: 'user_id,metric_date' });
       } catch (err) {
         console.warn('Failed to persist water to Supabase:', err);
+      }
+    }
+  };
+
+  // Steps Action (+steps, persisted to localStorage and Supabase daily_metrics)
+  const addSteps = async (amount = 1000) => {
+    const cleanAmount = Math.round(Number(amount) || 0);
+    if (cleanAmount <= 0) return;
+
+    const newSteps = Math.max(0, stepsCount + cleanAmount);
+    setStepsCount(newSteps);
+
+    try {
+      const prevMetrics = JSON.parse(localStorage.getItem('caloriesnap_today_metrics') || '{}');
+      localStorage.setItem(
+        'caloriesnap_today_metrics',
+        JSON.stringify({ ...prevMetrics, steps: newSteps })
+      );
+    } catch {}
+
+    showToast(`👟 +${cleanAmount.toLocaleString()} steps logged (${newSteps.toLocaleString()} total)`);
+
+    if (isSupabaseConfigured && userId) {
+      try {
+        const todayStr = getLocalYYYYMMDD();
+        await supabase.from('daily_metrics').upsert(
+          {
+            user_id: userId,
+            metric_date: todayStr,
+            steps_count: newSteps,
+          },
+          { onConflict: 'user_id,metric_date' }
+        );
+      } catch (err) {
+        console.warn('Failed to persist steps to Supabase:', err);
       }
     }
   };
@@ -1297,6 +1340,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         editingMeal,
         setEditingMeal,
         addWater,
+        addSteps,
         logWeight,
         logWorkout,
         logMeal,
