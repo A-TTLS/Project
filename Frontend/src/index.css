@@ -147,6 +147,47 @@
   animation: cs-modal-pop 0.24s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
+@keyframes cs-workout-lift {
+  0%, 100% { transform: translateY(1.5px); }
+  50%      { transform: translateY(-2.7px); }
+}
+
+@keyframes cs-workout-arm {
+  0%, 100% { transform: scaleY(0.75); }
+  50%      { transform: scaleY(1.45); }
+}
+
+@keyframes cs-workout-torso {
+  0%, 100% { transform: translateY(0.4px); }
+  50%      { transform: translateY(-0.6px); }
+}
+
+@keyframes cs-workout-spark {
+  0%, 25%, 100% { opacity: 0.15; transform: scale(0.85); }
+  50%, 65%      { opacity: 0.95; transform: scale(1.1); }
+}
+
+.cs-workout-lift {
+  animation: cs-workout-lift 1.05s ease-in-out infinite;
+}
+
+.cs-workout-arm {
+  transform-box: view-box;
+  animation: cs-workout-arm 1.05s ease-in-out infinite;
+}
+
+.cs-workout-torso {
+  transform-box: view-box;
+  transform-origin: center;
+  animation: cs-workout-torso 1.05s ease-in-out infinite;
+}
+
+.cs-workout-spark {
+  transform-box: view-box;
+  transform-origin: center;
+  animation: cs-workout-spark 1.05s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .cs-wave-front,
   .cs-wave-back,
@@ -158,7 +199,11 @@
   .cs-runner-trail,
   .cs-ring-pulse,
   .cs-fade-in-up,
-  .cs-modal-pop {
+  .cs-modal-pop,
+  .cs-workout-lift,
+  .cs-workout-arm,
+  .cs-workout-torso,
+  .cs-workout-spark {
     animation: none !important;
   }
 }
