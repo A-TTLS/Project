@@ -519,6 +519,13 @@ export const mealsService = {
    * 2. Fetch meals logged today for the authenticated user
    */
   async fetchTodayMeals(currentUserId?: string): Promise<DbMeal[]> {
+    return this.fetchMealsForDate(new Date(), currentUserId);
+  },
+
+  /**
+   * Fetch meals logged on a specific date for the authenticated user
+   */
+  async fetchMealsForDate(targetDate: Date, currentUserId?: string): Promise<DbMeal[]> {
     if (!isSupabaseConfigured) return [];
 
     try {
@@ -526,20 +533,21 @@ export const mealsService = {
       const targetUserId = currentUserId || user?.id;
       if (!targetUserId) return [];
 
-      const todayStart = new Date();
-      todayStart.setHours(0, 0, 0, 0);
+      const start = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), 0, 0, 0, 0);
+      const end = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), 23, 59, 59, 999);
 
       const { data, error } = await supabase
         .from('meals')
         .select('*')
         .eq('user_id', targetUserId)
-        .gte('logged_at', todayStart.toISOString())
+        .gte('logged_at', start.toISOString())
+        .lte('logged_at', end.toISOString())
         .order('logged_at', { ascending: true });
 
       if (error) throw error;
       return data || [];
     } catch (err) {
-      console.error('Error fetching today meals:', err);
+      console.error('Error fetching meals for date:', err);
       return [];
     }
   },
