@@ -144,7 +144,15 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
     updateMeal,
     deleteMeal,
     showToast,
+    updateProfile,
   } = useApp();
+
+  // ─── Manual Target Setting Modal (SCRUM-15: Set Own Target Manually) ───
+  const [showTargetModal, setShowTargetModal] = useState(false);
+  const [targetKcalInput, setTargetKcalInput] = useState('');
+  const [targetProteinInput, setTargetProteinInput] = useState('');
+  const [targetCarbsInput, setTargetCarbsInput] = useState('');
+  const [targetFatInput, setTargetFatInput] = useState('');
 
   // ─── Edit / Delete Meal Modal States (PR #14) ───
   const [mealToEdit, setMealToEdit] = useState<MealItem | null>(null);
@@ -229,6 +237,51 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
   const progressPct = Math.min(100, Math.round((safeConsumed / safeGoal) * 100));
   const remainingKcal = Math.max(0, safeGoal - safeConsumed);
 
+  // ─── Manual Target Setting Handlers (SCRUM-15) ───
+  const handleOpenTargetModal = () => {
+    setTargetKcalInput(safeGoal.toString());
+    setTargetProteinInput(proteinGoal.toString());
+    setTargetCarbsInput(carbsGoal.toString());
+    setTargetFatInput(fatGoal.toString());
+    setShowTargetModal(true);
+  };
+
+  const handleAutoBalanceMacros = (kcalOverride?: number) => {
+    const kcal = kcalOverride !== undefined ? kcalOverride : (parseInt(targetKcalInput, 10) || safeGoal);
+    const p = Math.max(40, Math.round((kcal * 0.25) / 4));
+    const f = Math.max(25, Math.round((kcal * 0.25) / 9));
+    const cb = Math.max(50, Math.round((kcal - (p * 4 + f * 9)) / 4));
+    setTargetProteinInput(p.toString());
+    setTargetFatInput(f.toString());
+    setTargetCarbsInput(cb.toString());
+  };
+
+  const handleApplyPreset = (delta: number) => {
+    const current = parseInt(targetKcalInput, 10) || safeGoal;
+    const newKcal = Math.max(1000, Math.min(5000, current + delta));
+    setTargetKcalInput(newKcal.toString());
+    handleAutoBalanceMacros(newKcal);
+  };
+
+  const handleSaveTarget = async () => {
+    const newGoal = parseInt(targetKcalInput, 10) || safeGoal;
+    const newProtein = parseInt(targetProteinInput, 10) || proteinGoal;
+    const newCarbs = parseInt(targetCarbsInput, 10) || carbsGoal;
+    const newFat = parseInt(targetFatInput, 10) || fatGoal;
+    if (newGoal < 800 || newGoal > 6000) {
+      showToast('⚠️ Please enter a target between 800 and 6,000 kcal');
+      return;
+    }
+    await updateProfile({
+      calorieGoal: newGoal,
+      proteinGoal: newProtein,
+      carbsGoal: newCarbs,
+      fatGoal: newFat,
+    });
+    setShowTargetModal(false);
+    showToast(`🎯 Daily targets updated: ${newGoal.toLocaleString()} kcal!`);
+  };
+
   // Quick Add Meal Modal
   const [showAddMealModal, setShowAddMealModal] = useState(false);
   const [mealName, setMealName] = useState('');
@@ -310,7 +363,7 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
     <Screen
       tab="Home"
       onSelectTab={onNavigate}
-      hideTabBar={showAddMealModal || showWorkoutModal || !!mealToEdit || !!mealToDelete}
+      hideTabBar={showAddMealModal || showTargetModal || showWorkoutModal || !!mealToEdit || !!mealToDelete}
     >
       {/* ─── Top Header ─── */}
       <Row style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
@@ -378,7 +431,7 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
       </Row>
 
       {/* ─── Main Calorie Budget Ring Card (SCRUM-33) ─── */}
-      <Card bg={c.blue} style={{ alignItems: 'center', paddingVertical: 18, marginBottom: 14 }}>
+      <Card bg={c.blue} style={{ alignItems: 'center', paddingVertical: 18, marginBottom: 12 }}>
         <Row style={{ alignSelf: 'stretch', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
           <View style={{ flex: 1, minWidth: 0 }}>
             <Txt s={11} color="#0369A1" w="700" style={{ letterSpacing: 0.5 }}>
@@ -481,6 +534,64 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
           </View>
         </Row>
       </Card>
+
+      {/* ─── Prominent Set Daily Target CTA (SCRUM-15) ─── */}
+      <Pressable
+        accessibilityLabel="Set my daily calorie and macro target manually"
+        onPress={handleOpenTargetModal}
+        style={({ hovered, pressed }: { hovered?: boolean; pressed: boolean }) => ({
+          width: '100%',
+          backgroundColor: hovered ? '#FFE770' : c.yellow,
+          borderRadius: 18,
+          paddingVertical: 13,
+          paddingHorizontal: 14,
+          marginBottom: 14,
+          borderWidth: 1.5,
+          borderColor: '#F5D033',
+          boxShadow: '0 4px 12px rgba(234, 179, 8, 0.22)',
+          transform: [{ scale: pressed ? 0.99 : 1 }],
+          cursor: 'pointer' as any,
+        })}
+      >
+        <Row style={{ justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+          <Row style={{ alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
+            <View
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: 12,
+                backgroundColor: '#FFFFFF',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+                boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+              }}
+            >
+              <Icon name="target" size={18} color="#B45309" />
+            </View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Txt s={14} w="800" color={c.ink}>Set My Daily Target</Txt>
+              <Txt s={11} color="#665200">
+                Current goal: {safeGoal.toLocaleString()} kcal · P:{proteinGoal}g C:{carbsGoal}g F:{fatGoal}g
+              </Txt>
+            </View>
+          </Row>
+
+          <View
+            style={{
+              backgroundColor: '#FFFFFF',
+              paddingHorizontal: 11,
+              paddingVertical: 6,
+              borderRadius: 999,
+              flexShrink: 0,
+              borderWidth: 1,
+              borderColor: '#FDE68A',
+            }}
+          >
+            <Txt s={11} w="800" color={c.ink}>Edit ›</Txt>
+          </View>
+        </Row>
+      </Pressable>
 
       {/* ─── Macronutrient Breakdown ─── */}
       <Card style={{ marginBottom: 14 }}>
@@ -989,6 +1100,183 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
 
               <Btn bg={c.yellow} onPress={handleQuickAddMeal} style={{ marginTop: 6 }}>
                 Log Meal to Diary
+              </Btn>
+            </ScrollView>
+          </div>
+        </View>
+      )}
+
+      {/* ─── Manual Target Setting Modal (SCRUM-15: Set Own Target Manually) ─── */}
+      {showTargetModal && (
+        <View style={{ position: 'fixed' as any, top: 0, bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(15, 23, 42, 0.6)', justifyContent: 'center', alignItems: 'center', padding: 14, zIndex: 9999 }}>
+          <div
+            style={{
+              width: '100%',
+              maxWidth: 420,
+              maxHeight: '90vh',
+              backgroundColor: c.card,
+              borderRadius: 24,
+              padding: 20,
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+              boxShadow: '0 20px 45px rgba(0,0,0,0.25)',
+            }}
+          >
+            <Row style={{ justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14, gap: 8 }}>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Txt s={18} w="800">🎯 Set Daily Targets</Txt>
+                <Txt s={11} color={c.mute}>Customize your calorie & macro goals manually</Txt>
+              </View>
+              <Pressable accessibilityLabel="Close target modal" onPress={() => setShowTargetModal(false)} style={{ padding: 4, flexShrink: 0 }}>
+                <Icon name="close" size={20} color={c.mute} />
+              </Pressable>
+            </Row>
+
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 14, paddingBottom: 4 }}>
+              {/* Quick Goal Presets */}
+              <View style={{ gap: 6 }}>
+                <Txt s={11} w="700" color={c.mute}>QUICK GOAL PRESETS</Txt>
+                <Row style={{ gap: 6, flexWrap: 'wrap' }}>
+                  <Pressable
+                    onPress={() => handleApplyPreset(-500)}
+                    style={({ hovered }: { hovered?: boolean }) => ({
+                      flex: 1,
+                      minWidth: 90,
+                      paddingVertical: 8,
+                      paddingHorizontal: 6,
+                      borderRadius: 10,
+                      backgroundColor: hovered ? '#FDE68A' : '#FEF3C7',
+                      alignItems: 'center',
+                      borderWidth: 1,
+                      borderColor: '#FDE68A',
+                      cursor: 'pointer' as any,
+                    })}
+                  >
+                    <Txt s={11} w="700" color="#92400E">-500 Deficit</Txt>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => {
+                      setTargetKcalInput('2000');
+                      handleAutoBalanceMacros(2000);
+                    }}
+                    style={({ hovered }: { hovered?: boolean }) => ({
+                      flex: 1,
+                      minWidth: 96,
+                      paddingVertical: 8,
+                      paddingHorizontal: 6,
+                      borderRadius: 10,
+                      backgroundColor: hovered ? '#BAE6FD' : '#E0F2FE',
+                      alignItems: 'center',
+                      borderWidth: 1,
+                      borderColor: '#BAE6FD',
+                      cursor: 'pointer' as any,
+                    })}
+                  >
+                    <Txt s={11} w="700" color="#0369A1">2,000 Standard</Txt>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => handleApplyPreset(300)}
+                    style={({ hovered }: { hovered?: boolean }) => ({
+                      flex: 1,
+                      minWidth: 90,
+                      paddingVertical: 8,
+                      paddingHorizontal: 6,
+                      borderRadius: 10,
+                      backgroundColor: hovered ? '#BBF7D0' : '#DCFCE7',
+                      alignItems: 'center',
+                      borderWidth: 1,
+                      borderColor: '#BBF7D0',
+                      cursor: 'pointer' as any,
+                    })}
+                  >
+                    <Txt s={11} w="700" color="#15803D">+300 Surplus</Txt>
+                  </Pressable>
+                </Row>
+              </View>
+
+              {/* Daily Calorie Target Input */}
+              <View style={{ gap: 6 }}>
+                <Row style={{ justifyContent: 'space-between', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  <Txt s={12} w="700" color={c.ink}>Daily Calorie Target (kcal)</Txt>
+                  <Row style={{ gap: 6 }}>
+                    <Pressable
+                      onPress={() => {
+                        const cur = parseInt(targetKcalInput, 10) || safeGoal;
+                        const updated = Math.max(800, cur - 100);
+                        setTargetKcalInput(updated.toString());
+                        handleAutoBalanceMacros(updated);
+                      }}
+                      style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, backgroundColor: c.bg, borderWidth: 1, borderColor: c.line }}
+                    >
+                      <Txt s={11} w="700" color={c.ink}>-100</Txt>
+                    </Pressable>
+                    <Pressable
+                      onPress={() => {
+                        const cur = parseInt(targetKcalInput, 10) || safeGoal;
+                        const updated = Math.min(6000, cur + 100);
+                        setTargetKcalInput(updated.toString());
+                        handleAutoBalanceMacros(updated);
+                      }}
+                      style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, backgroundColor: c.bg, borderWidth: 1, borderColor: c.line }}
+                    >
+                      <Txt s={11} w="700" color={c.ink}>+100</Txt>
+                    </Pressable>
+                  </Row>
+                </Row>
+                <TextInput
+                  value={targetKcalInput}
+                  onChangeText={(val: string) => {
+                    setTargetKcalInput(val);
+                    const p = parseInt(val, 10);
+                    if (p && p >= 800) handleAutoBalanceMacros(p);
+                  }}
+                  inputMode="numeric"
+                  placeholder="2000"
+                  placeholderTextColor="#94A3B8"
+                  style={{ borderWidth: 1, borderColor: c.line, borderRadius: 12, padding: 11, fontSize: 16, fontWeight: '700', backgroundColor: '#FFFFFF', color: '#1E293B', minWidth: 0 }}
+                />
+              </View>
+
+              {/* Macronutrient Targets */}
+              <View style={{ gap: 6 }}>
+                <Row style={{ justifyContent: 'space-between', alignItems: 'center', gap: 6 }}>
+                  <Txt s={12} w="700" color={c.ink}>Macronutrient Targets</Txt>
+                  <Pressable
+                    onPress={() => handleAutoBalanceMacros()}
+                    style={{ backgroundColor: '#F1F5F9', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 }}
+                  >
+                    <Txt s={10} w="700" color="#475569">⚡ Auto-Balance</Txt>
+                  </Pressable>
+                </Row>
+                <Row style={{ gap: 8 }}>
+                  <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
+                    <Txt s={11} color="#3E6B52" w="700">Protein (g)</Txt>
+                    <TextInput value={targetProteinInput} onChangeText={setTargetProteinInput} inputMode="numeric" placeholder="90" placeholderTextColor="#94A3B8" style={{ borderWidth: 1, borderColor: c.line, borderRadius: 10, padding: 8, fontSize: 13, fontWeight: '600', color: '#1E293B', minWidth: 0, width: '100%' }} />
+                  </View>
+                  <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
+                    <Txt s={11} color="#CA8A04" w="700">Carbs (g)</Txt>
+                    <TextInput value={targetCarbsInput} onChangeText={setTargetCarbsInput} inputMode="numeric" placeholder="180" placeholderTextColor="#94A3B8" style={{ borderWidth: 1, borderColor: c.line, borderRadius: 10, padding: 8, fontSize: 13, fontWeight: '600', color: '#1E293B', minWidth: 0, width: '100%' }} />
+                  </View>
+                  <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
+                    <Txt s={11} color="#EF4444" w="700">Fats (g)</Txt>
+                    <TextInput value={targetFatInput} onChangeText={setTargetFatInput} inputMode="numeric" placeholder="50" placeholderTextColor="#94A3B8" style={{ borderWidth: 1, borderColor: c.line, borderRadius: 10, padding: 8, fontSize: 13, fontWeight: '600', color: '#1E293B', minWidth: 0, width: '100%' }} />
+                  </View>
+                </Row>
+              </View>
+
+              {/* Calculated Macro Calories Sum */}
+              <View style={{ padding: 10, borderRadius: 12, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0' }}>
+                <Row style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Txt s={11} color={c.mute}>Macro Calories Sum</Txt>
+                  <Txt s={12} w="700" color={c.ink}>
+                    {((parseInt(targetProteinInput, 10) || 0) * 4 + (parseInt(targetCarbsInput, 10) || 0) * 4 + (parseInt(targetFatInput, 10) || 0) * 9).toLocaleString()} kcal
+                  </Txt>
+                </Row>
+              </View>
+
+              <Btn bg={c.yellow} onPress={handleSaveTarget}>
+                Save Daily Targets
               </Btn>
             </ScrollView>
           </div>
