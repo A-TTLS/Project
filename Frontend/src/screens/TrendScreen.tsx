@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Pressable } from 'react-native-web';
 import { useApp } from '../context/AppContext';
+import { WeightTrendCard } from '../components/WeightTrendCard';
 
 import {
   Screen,
@@ -35,6 +36,9 @@ export default function TrendScreen({
 
   const {
     currentWeight,
+    targetWeight,
+    weightLogs,
+    logWeight,
     consumedKcal,
     waterMl,
     stepsCount,
@@ -364,118 +368,13 @@ export default function TrendScreen({
 
           </Card>
 
-                    {/* WEIGHT TREND */}
-
-          <Card
-            style={{
-              marginTop:16
-            }}
-          >
-
-            <Row
-              style={{
-                justifyContent:'space-between'
-              }}
-            >
-
-              <Txt
-                s={17}
-                w="800"
-              >
-                Weight trend
-              </Txt>
-
-
-              <Txt
-                s={10}
-                color={c.mute}
-              >
-                kg
-              </Txt>
-
-            </Row>
-
-
-
-            <Row
-              style={{
-                alignItems:'baseline',
-                marginTop:10
-              }}
-            >
-
-              <Txt
-                s={34}
-                w="800"
-              >
-                {currentWeight}
-              </Txt>
-
-
-              <Txt
-                s={11}
-                color={c.mute}
-                style={{
-                  marginLeft:8
-                }}
-              >
-                latest · 15 Oct
-              </Txt>
-
-
-            </Row>
-
-
-
-            {/* SIMPLE EMPTY GRAPH PLACEHOLDER */}
-
-            <View
-              style={{
-                height:120,
-                marginTop:10,
-                borderRadius:16,
-                backgroundColor:c.bg,
-                overflow:'hidden',
-                position:'relative'
-              }}
-            >
-
-              {[0,1,2].map(i=>(
-
-                <View
-                  key={i}
-                  style={{
-                    position:'absolute',
-                    left:20,
-                    right:20,
-                    top:30+i*25,
-                    borderTopWidth:1,
-                    borderStyle:'dotted',
-                    borderColor:c.line
-                  }}
-                />
-
-              ))}
-
-
-              <Txt
-                s={11}
-                color={c.mute}
-                style={{
-                  position:'absolute',
-                  top:50,
-                  alignSelf:'center'
-                }}
-              >
-                Weight history will appear after tracking starts
-              </Txt>
-
-
-            </View>
-
-
-
-          </Card>
+                    {/* WEIGHT TREND GRAPH */}
+          <WeightTrendCard
+            currentWeight={currentWeight}
+            targetWeight={targetWeight}
+            weightLogs={weightLogs}
+            onLogWeight={logWeight}
+          />
 
 
 
