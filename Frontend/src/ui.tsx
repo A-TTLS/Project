@@ -90,7 +90,7 @@ export const Btn = ({ children, bg = c.yellow, onPress, style, disabled = false 
   <Pressable
     disabled={disabled}
     onPress={disabled ? undefined : onPress}
-    style={({ pressed }) => [st.btn, { backgroundColor: bg, opacity: disabled ? 0.55 : 1 }, pressed && !disabled && { opacity: 0.8 }, style]}
+    style={({ pressed }: { pressed: boolean }) => [st.btn, { backgroundColor: bg, opacity: disabled ? 0.55 : 1 }, pressed && !disabled && { opacity: 0.8 }, style]}
   >
     <Txt w="700">{children}</Txt>
   </Pressable>
@@ -99,7 +99,7 @@ export const Btn = ({ children, bg = c.yellow, onPress, style, disabled = false 
 export const IconBox = ({ size = 36, label = '', onPress }: { size?: number; label?: string; onPress?: () => void }) => (
   <Pressable
     onPress={onPress}
-    style={({ pressed }) => [
+    style={({ pressed }: { pressed: boolean }) => [
       {
         width: size,
         height: size,
@@ -135,11 +135,132 @@ export const Row = ({ style, children }: { style?: ViewStyle | ViewStyle[]; chil
   <View style={[{ flexDirection: 'row', alignItems: 'center' }, style as any]}>{children}</View>
 );
 
-export const Ring = ({ size = 56, label, progress = 0.91 }: { size?: number; label?: string; progress?: number }) => (
-  <View style={{ width: size, height: size, borderRadius: size / 2, borderWidth: Math.max(3, size / 16), borderColor: c.dark, alignItems: 'center', justifyContent: 'center' }}>
-    {label ? <Txt s={size / 4} w="700">{label}</Txt> : null}
-  </View>
-);
+export const TwoToneCalorieRing = ({
+  size = 190,
+  strokeWidth = 14,
+  consumed = 0,
+  goal = 2000,
+  trackColor = '#E0F2FE', // Soft light pastel track
+  progressColor = '#0284C7', // Rich dark active arc
+  children,
+}: {
+  size?: number;
+  strokeWidth?: number;
+  consumed?: number;
+  goal?: number;
+  trackColor?: string;
+  progressColor?: string;
+  children?: ReactNode;
+}) => {
+  const safeGoal = Math.max(1, goal || 2000);
+  const safeConsumed = Math.max(0, consumed || 0);
+  const ratio = Math.min(1, safeConsumed / safeGoal);
+
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const strokeDashoffset = circumference - ratio * circumference;
+
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+      <svg
+        width={size}
+        height={size}
+        viewBox={`0 0 ${size} ${size}`}
+        style={{ transform: 'rotate(-90deg)', overflow: 'visible' }}
+      >
+        {/* Unconsumed / Remaining Track (Background Ring) */}
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          stroke={trackColor}
+          strokeWidth={strokeWidth}
+          fill="none"
+        />
+        {/* Consumed / Intaked Progress (Active Fill Arc) */}
+        {ratio > 0 && (
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            stroke={progressColor}
+            strokeWidth={strokeWidth}
+            strokeDasharray={circumference}
+            strokeDashoffset={strokeDashoffset}
+            strokeLinecap="round"
+            fill="none"
+            style={{
+              transition: 'stroke-dashoffset 0.4s ease-in-out',
+            }}
+          />
+        )}
+      </svg>
+      {children ? (
+        <View style={{ position: 'absolute', alignItems: 'center', justifyContent: 'center' }}>
+          {children}
+        </View>
+      ) : null}
+    </View>
+  );
+};
+
+export const Ring = ({
+  size = 56,
+  label,
+  progress = 0.91,
+  trackColor = '#E0F2FE',
+  progressColor = '#0284C7',
+}: {
+  size?: number;
+  label?: string;
+  progress?: number;
+  trackColor?: string;
+  progressColor?: string;
+}) => {
+  const strokeWidth = Math.max(3.5, size / 14);
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const ratio = Math.max(0, Math.min(1, progress ?? 0));
+  const strokeDashoffset = circumference - ratio * circumference;
+
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+      <svg
+        width={size}
+        height={size}
+        viewBox={`0 0 ${size} ${size}`}
+        style={{ transform: 'rotate(-90deg)', overflow: 'visible' }}
+      >
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          stroke={trackColor}
+          strokeWidth={strokeWidth}
+          fill="none"
+        />
+        {ratio > 0 && (
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            stroke={progressColor}
+            strokeWidth={strokeWidth}
+            strokeDasharray={circumference}
+            strokeDashoffset={strokeDashoffset}
+            strokeLinecap="round"
+            fill="none"
+          />
+        )}
+      </svg>
+      {label ? (
+        <View style={{ position: 'absolute', alignItems: 'center', justifyContent: 'center' }}>
+          <Txt s={Math.max(9, size / 4.2)} w="700">{label}</Txt>
+        </View>
+      ) : null}
+    </View>
+  );
+};
 
 export const Title = ({ title, sub, right }: { title: string; sub?: string; right?: ReactNode }) => (
   <Row style={{ justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
@@ -226,39 +347,49 @@ export const TabBar = ({ active, onSelectTab }: { active: string; onSelectTab?: 
 
 export const Screen = ({
   tab,
+  hideTabBar = false,
   children,
   footer,
   onSelectTab,
 }: {
   tab?: string;
+  hideTabBar?: boolean;
   children: ReactNode;
   footer?: ReactNode;
   onSelectTab?: (tab: string) => void;
-}) => (
-  <View
-    style={{
-      minHeight: '100vh',
-      width: '100%',
-      backgroundColor: c.bg,
-      position: 'relative',
-      paddingBottom: tab ? 120 : 40,
-    }}
-  >
+}) => {
+  const allowedTabs = ['Home', 'Social', 'Trend', 'Profile'];
+  const shouldShowTabBar = !hideTabBar && Boolean(tab && allowedTabs.some((t) => tab === t || tab.startsWith(`${t} `) || tab.startsWith(`${t}·`)));
+
+  return (
     <View
       style={{
+        minHeight: '100vh',
         width: '100%',
-        maxWidth: 580,
-        marginHorizontal: 'auto' as any,
-        paddingHorizontal: 20,
-        paddingTop: 24,
+        maxWidth: '100vw',
+        overflowX: 'hidden' as any,
+        backgroundColor: c.bg,
+        position: 'relative',
+        paddingBottom: shouldShowTabBar ? 110 : 32,
       }}
     >
-      {children}
+      <View
+        style={{
+          width: '100%',
+          maxWidth: 580,
+          marginHorizontal: 'auto' as any,
+          paddingHorizontal: 16,
+          paddingTop: 20,
+          boxSizing: 'border-box' as any,
+        }}
+      >
+        {children}
+      </View>
+      {footer}
+      {shouldShowTabBar ? <TabBar active={tab!} onSelectTab={onSelectTab} /> : null}
     </View>
-    {footer}
-    {tab ? <TabBar active={tab} onSelectTab={onSelectTab} /> : null}
-  </View>
-);
+  );
+};
 
 export const MealRow = ({
   meta,
@@ -398,7 +529,7 @@ export function ActionButton({
       accessibilityRole="button"
       disabled={disabled}
       onPress={onPress}
-      style={({ pressed }) => [
+      style={({ pressed }: { pressed: boolean }) => [
         st.action,
         primary ? st.primaryAction : st.secondaryAction,
         pressed && st.pressed,
@@ -437,7 +568,7 @@ export function PageHeader({
             accessibilityLabel="Go back"
             accessibilityRole="button"
             onPress={onBack}
-            style={({ pressed }) => [st.backButton, pressed && st.pressed]}
+            style={({ pressed }: { pressed: boolean }) => [st.backButton, pressed && st.pressed]}
           >
             <Icon name="arrowLeft" size={20} />
           </Pressable>
@@ -470,19 +601,21 @@ const st = StyleSheet.create({
   segItem: { flex: 1, alignItems: 'center', paddingVertical: 10, borderRadius: 999, cursor: 'pointer' as any },
   tabbar: {
     position: 'fixed' as any,
-    maxWidth: 540,
-    left: 20,
-    right: 20,
+    maxWidth: 480,
+    left: 16,
+    right: 16,
     marginHorizontal: 'auto' as any,
-    bottom: 20,
-    height: 70,
-    borderRadius: 35,
-    backgroundColor: c.card,
-    paddingHorizontal: 12,
+    bottom: 16,
+    height: 66,
+    borderRadius: 9999,
+    backgroundColor: 'rgba(255, 255, 255, 0.92)' as any,
+    backdropFilter: 'blur(12px)' as any,
+    WebkitBackdropFilter: 'blur(12px)' as any,
+    paddingHorizontal: 16,
     borderWidth: 1,
-    borderColor: c.line,
+    borderColor: 'rgba(226, 232, 240, 0.85)',
     justifyContent: 'space-between',
-    boxShadow: '0 8px 24px rgba(0,0,0,0.1)',
+    boxShadow: '0 10px 25px -5px rgba(15, 23, 42, 0.14), 0 8px 10px -6px rgba(15, 23, 42, 0.05)',
     zIndex: 90,
   },
   page: {
@@ -494,10 +627,11 @@ const st = StyleSheet.create({
   pageColumn: {
     width: "100%",
     maxWidth: 520,
-    paddingTop: 24,
-    paddingHorizontal: 24,
+    paddingTop: 20,
+    paddingHorizontal: 16,
     paddingBottom: 40,
     gap: 20,
+    boxSizing: 'border-box' as any,
   },
   action: {
     width: "100%",

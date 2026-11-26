@@ -147,6 +147,7 @@ export default function FeedPostCard({ post, onLike, onComment, onFollow, onVisi
           onChangeText={setDraft}
           onSubmitEditing={send}
           placeholder="Add a comment…"
+          placeholderTextColor="#94A3B8"
           maxLength={500}
           style={{
             flex: 1,

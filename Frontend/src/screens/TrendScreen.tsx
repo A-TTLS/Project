@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Pressable } from 'react-native-web';
 import { useApp } from '../context/AppContext';
-import { WeightTrendCard } from '../components/WeightTrendCard';
+
 
 import {
   Screen,
@@ -27,11 +27,13 @@ export default function TrendScreen({
 }: TrendScreenProps) {
 
   const [activeTab, setActiveTab] = useState(initialTab);
-  const [timeRange, setTimeRange] =
-    useState<'Week' | 'Month' | '6 Months'>('Week');
+
+  // Follow the tab chosen from outside (e.g. "Trend · Calendar" in the top bar).
+  useEffect(() => {
+    setActiveTab(initialTab);
+  }, [initialTab]);
 
   const now = new Date();
-  const currentDayOfWeek = (now.getDay() + 6) % 7; // Monday = 0, Sunday = 6
   const [selectedDay, setSelectedDay] = useState(now.getDate());
 
   const {
@@ -44,24 +46,6 @@ export default function TrendScreen({
     stepsCount,
     showToast,
   } = useApp();
-
-  const dayLetters = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-  const daysData = dayLetters.map((letter, idx) => {
-    const d = new Date(now);
-    d.setDate(now.getDate() + (idx - currentDayOfWeek));
-    return {
-      day: letter,
-      date: d.getDate(),
-      kcal: idx === currentDayOfWeek ? consumedKcal : idx < currentDayOfWeek ? 1650 : 0,
-    };
-  });
-
-
-  const maxKcal = Math.max(
-    ...daysData.map(d => d.kcal),
-    2000
-  );
-
 
   const calendarDays = Array.from(
     {length:31},
@@ -112,261 +96,8 @@ export default function TrendScreen({
 
         <>
 
-          {/* TIME RANGE */}
-          <Row
-            style={{
-              marginBottom:14,
-              gap:6
-            }}
-          >
-
-            {(['Week','Month','6 Months'] as const)
-              .map(range => (
-
-              <Pill
-                key={range}
-                active={timeRange===range}
-                onPress={()=>{
-                  setTimeRange(range);
-                  showToast(`Viewing ${range}`);
-                }}
-              >
-                {range}
-              </Pill>
-
-            ))}
-
-          </Row>
-
-
-
-          {/* CALORIE CARD */}
-
-          <Card>
-
-            <Row
-              style={{
-                justifyContent:'space-between'
-              }}
-            >
-
-              <View>
-
-                <Txt
-                  s={17}
-                  w="800"
-                >
-                  Calorie intake
-                </Txt>
-
-
-                <Txt
-                  s={11}
-                  color={c.mute}
-                >
-                  9–15 Oct 2026
-                </Txt>
-
-              </View>
-
-
-              <Pill bg={c.yellow}>
-                kcal
-              </Pill>
-
-
-            </Row>
-
-
-            <Row
-              style={{
-                alignItems:'baseline',
-                marginTop:12
-              }}
-            >
-
-              <Txt
-                s={34}
-                w="800"
-              >
-                {consumedKcal.toLocaleString()}
-              </Txt>
-
-
-              <Txt
-                s={12}
-                color={c.mute}
-                style={{
-                  marginLeft:8
-                }}
-              >
-                avg / completed day
-              </Txt>
-
-            </Row>
-
-
-            {/* GRAPH AREA */}
-
-            <View
-              style={{
-                height:160,
-                marginTop:20,
-                position:'relative'
-              }}
-            >
-
-              {[0,1,2,3].map(i=>(
-
-                <View
-                  key={i}
-                  style={{
-                    position:'absolute',
-                    left:0,
-                    right:0,
-                    top:i*35,
-                    borderTopWidth:1,
-                    borderStyle:'dotted',
-                    borderColor:c.line
-                  }}
-                />
-
-              ))}
-
-
-              <Row
-                style={{
-                  height:'100%',
-                  alignItems:'flex-end',
-                  justifyContent:'space-between'
-                }}
-              >
-
-                {daysData.map((d,index)=>{
-
-                  const height =
-                    d.kcal === 0
-                    ? 8
-                    : (d.kcal/maxKcal)*120;
-
-
-                  return (
-
-                    <Pressable
-                      key={index}
-                      onPress={()=>{
-                        setSelectedDay(d.date);
-                        showToast(
-                          `${d.date} Oct: ${d.kcal} kcal`
-                        );
-                      }}
-                    >
-
-                      <View
-                        style={{
-                          width:26,
-                          height,
-                          borderRadius:14,
-                          backgroundColor:
-                            d.kcal===0
-                            ? c.block
-                            : c.yellow
-                        }}
-                      />
-
-                    </Pressable>
-
-                  )
-
-                })}
-
-              </Row>
-
-            </View>
-
-
-            <Row
-              style={{
-                justifyContent:'space-between',
-                marginTop:8
-              }}
-            >
-
-              {daysData.map(d=>(
-
-                <Txt
-                  key={d.date}
-                  s={10}
-                  color={c.mute}
-                >
-                  {d.day}
-                </Txt>
-
-              ))}
-
-            </Row>
-
-
-            <Row
-              style={{
-                justifyContent:'space-around',
-                marginTop:14,
-                paddingTop:10,
-                borderTopWidth:1,
-                borderColor:c.line
-              }}
-            >
-
-              {[
-                {name:'Breakfast', color:'#FFEFA0'},
-                {name:'Lunch', color:'#DDF0D3'},
-                {name:'Dinner', color:'#D8EDF8'},
-                {name:'Snacks', color:'#FBDAD6'},
-              ].map(item => (
-
-                <Row
-                  key={item.name}
-                  style={{
-                    alignItems:'center'
-                  }}
-                >
-
-                  <View
-                    style={{
-                      width:8,
-                      height:8,
-                      borderRadius:4,
-                      backgroundColor:item.color,
-                      marginRight:5
-                    }}
-                  />
-
-                  <Txt
-                    s={10}
-                    color={c.mute}
-                  >
-                    {item.name}
-                  </Txt>
-
-                </Row>
-
-              ))}
-
-            </Row>
-
-
-            <Txt
-              s={11}
-              color={c.mute}
-              style={{
-                marginTop:12
-              }}
-            >
-              Today is still in progress. Your final intake will appear after the day ends.
-            </Txt>
-
-
-          </Card>
+          {/* CALORIE INTAKE CHART (Member 5) */}
+          <CalorieIntakeChart />
 
                     {/* WEIGHT TREND GRAPH */}
           <WeightTrendCard

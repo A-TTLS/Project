@@ -1,6 +1,12 @@
 @import "tailwindcss";
 
 @layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
   html,
   body {
     min-height: 100%;
@@ -11,11 +17,28 @@
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    overflow-x: hidden;
+    max-width: 100vw;
   }
 
   #root {
     min-height: 100vh;
     display: flex;
     flex-direction: column;
+    overflow-x: hidden;
+    max-width: 100vw;
+  }
+
+  /* Style all input and textarea placeholders in soft light grey */
+  input::placeholder,
+  textarea::placeholder {
+    color: #94A3B8 !important;
+    opacity: 1 !important;
+  }
+
+  /* Active user-typed text */
+  input,
+  textarea {
+    color: #1E293B;
   }
 }

@@ -77,6 +77,7 @@ export default function SocialFeedTab({ tab }: { tab: FeedTab }) {
         <>
           <TextInput
             placeholder="Search meals, people or campus spots..."
+            placeholderTextColor="#94A3B8"
             value={feed.search}
             onChangeText={feed.setSearch}
             style={searchStyle}
@@ -167,6 +168,7 @@ function ShareCard({ onShare }: { onShare: (caption: string, visibility: Visibil
         value={caption}
         onChangeText={setCaption}
         placeholder="Say something (optional)"
+        placeholderTextColor="#94A3B8"
         maxLength={200}
         style={{ ...searchStyle, height: 42, marginBottom: 10 }}
       />

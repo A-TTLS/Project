@@ -16,12 +16,14 @@ interface LoginPageProps {
   onSignedIn: (email: string) => void;
   onGoToRegister: () => void;
   onGoBack: () => void;
+  onForgotPassword?: () => void;
 }
 
 export default function LoginPage({
   onSignedIn,
   onGoToRegister,
   onGoBack,
+  onForgotPassword,
 }: LoginPageProps) {
   const { width } = useWindowDimensions();
   const isWide = width >= 640;
@@ -102,7 +104,7 @@ export default function LoginPage({
           <Pressable
             accessibilityRole="button"
             onPress={onGoBack}
-            style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}
+            style={({ pressed }: { pressed: boolean }) => [styles.backBtn, pressed && styles.pressed]}
           >
             <Icon name="arrowLeft" size={18} />
           </Pressable>
@@ -192,6 +194,11 @@ export default function LoginPage({
                 <Icon name="eyeOff" size={18} />
               </Pressable>
             </View>
+            {onForgotPassword && (
+              <Pressable accessibilityRole="link" onPress={onForgotPassword} style={styles.forgotBtn}>
+                <Text style={styles.switchLink}>Forgot password?</Text>
+              </Pressable>
+            )}
           </View>
 
           <ActionButton
@@ -215,7 +222,7 @@ export default function LoginPage({
             accessibilityRole="button"
             disabled={isGoogleLoading}
             onPress={handleGoogleSignIn}
-            style={({ pressed }) => [styles.oauthBtn, pressed && styles.pressed]}
+            style={({ pressed }: { pressed: boolean }) => [styles.oauthBtn, pressed && styles.pressed]}
           >
             {isGoogleLoading ? (
               <ActivityIndicator color={colors.ink} size="small" />
@@ -230,7 +237,7 @@ export default function LoginPage({
           <Pressable
             accessibilityRole="button"
             onPress={() => setMessage({ type: "info", text: "Apple Sign-In is configured for iOS devices." })}
-            style={({ pressed }) => [styles.oauthBtn, pressed && styles.pressed]}
+            style={({ pressed }: { pressed: boolean }) => [styles.oauthBtn, pressed && styles.pressed]}
           >
             <Icon name="apple" size={18} />
             <Text style={styles.oauthBtnText}>Apple</Text>
@@ -250,6 +257,10 @@ export default function LoginPage({
 }
 
 const styles = StyleSheet.create({
+  forgotBtn: {
+    alignSelf: "flex-end",
+    cursor: "pointer" as unknown as undefined,
+  },
   screen: {
     minHeight: "100vh",
     width: "100%",

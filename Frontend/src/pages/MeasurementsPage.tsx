@@ -168,7 +168,7 @@ export default function MeasurementsPage({
               <TextInput
                 accessibilityLabel="Age"
                 inputMode="numeric"
-                onChangeText={(age) => update({ age })}
+                onChangeText={(age: string) => update({ age })}
                 placeholder="e.g. 21"
                 placeholderTextColor="#94a3b8"
                 style={styles.input}
@@ -184,7 +184,7 @@ export default function MeasurementsPage({
               <TextInput
                 accessibilityLabel="Height"
                 inputMode="decimal"
-                onChangeText={(height) => update({ height })}
+                onChangeText={(height: string) => update({ height })}
                 placeholder={imperial ? "e.g. 65" : "e.g. 165"}
                 placeholderTextColor="#94a3b8"
                 style={styles.input}
@@ -203,7 +203,7 @@ export default function MeasurementsPage({
               <TextInput
                 accessibilityLabel="Current Weight"
                 inputMode="decimal"
-                onChangeText={(weight) => update({ weight })}
+                onChangeText={(weight: string) => update({ weight })}
                 placeholder={imperial ? "e.g. 130" : "e.g. 60.0"}
                 placeholderTextColor="#94a3b8"
                 style={styles.input}
@@ -219,7 +219,7 @@ export default function MeasurementsPage({
               <TextInput
                 accessibilityLabel="Target Weight"
                 inputMode="decimal"
-                onChangeText={(target) => update({ target })}
+                onChangeText={(target: string) => update({ target })}
                 placeholder={imperial ? "e.g. 125" : "e.g. 56.0"}
                 placeholderTextColor="#94a3b8"
                 style={styles.input}

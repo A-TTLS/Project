@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, ScrollView, Pressable, SafeAreaView } from 'react-native-web';
 import { AppProvider, useApp } from './context/AppContext';
 import LandingPage from './pages/LandingPage';
@@ -13,14 +13,28 @@ import SocialScreen from './screens/SocialScreen';
 import TrendScreen from './screens/TrendScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import RewardsScreen from './screens/RewardsScreen';
+import PasswordResetPage from './pages/PasswordResetPage';
 import { Txt, Row, c } from './ui';
 import type { ActivityLevel, UserMeasurements, UserProfile } from './services/authService';
-import { checkSupabaseHealth } from './services/supabaseClient';
+import { checkSupabaseHealth, supabase } from './services/supabaseClient';
+
+// Opened from a password-reset email? Read this before Supabase clears the
+// link's #...type=recovery part from the address bar.
+const OPENED_FROM_RESET_LINK =
+  typeof window !== 'undefined' && /type=recovery/.test(window.location.hash + window.location.search);
 
 function AppContent() {
-  const [currentScreen, setCurrentScreen] = useState('Home');
+  const [currentScreen, setCurrentScreen] = useState(OPENED_FROM_RESET_LINK ? 'Reset Password' : 'Home');
   const [dbStatus, setDbStatus] = useState<'checking' | 'connected' | 'offline'>('checking');
   const [showNavSwitcher, setShowNavSwitcher] = useState(true);
+
+  // A password-reset link signs the user in with a recovery session; show the new-password form.
+  useEffect(() => {
+    const { data } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') setCurrentScreen('Reset Password');
+    });
+    return () => data.subscription.unsubscribe();
+  }, []);
 
   // Check Supabase Backend Health on load
   useEffect(() => {
@@ -30,19 +44,34 @@ function AppContent() {
     });
   }, []);
 
-  // Onboarding state
+  // Onboarding state - blank initial inputs for real user biometrics
   const [user, setUser] = useState<UserProfile | null>(null);
   const [measurements, setMeasurements] = useState<UserMeasurements>({
-    gender: 'Female',
-    age: '21',
-    height: '158',
-    weight: '48.5',
-    target: '48',
+    gender: '' as any,
+    age: '',
+    height: '',
+    weight: '',
+    target: '',
     units: 'metric',
   });
   const [activityLevel, setActivityLevel] = useState<ActivityLevel>('moderate');
 
-  const { toastMessage, reloadUserData } = useApp();
+  const { toastMessage, reloadUserData, userId, hasCompletedOnboarding } = useApp();
+  const hasAutoRedirected = useRef(false);
+
+  // Auto-route first-time Google sign-up / login to Profile Setup once if biometrics not yet completed
+  useEffect(() => {
+    if (!userId) {
+      hasAutoRedirected.current = false;
+      return;
+    }
+
+    if (!hasAutoRedirected.current && hasCompletedOnboarding === false && !OPENED_FROM_RESET_LINK) {
+      hasAutoRedirected.current = true;
+      console.log('[CalorieSnap Auth] First-time login detected without biometrics — routing to Profile Setup');
+      setCurrentScreen('Profile Setup');
+    }
+  }, [userId, hasCompletedOnboarding]);
 
   const allScreens = [
     'Home',
@@ -108,7 +137,33 @@ function AppContent() {
           <LoginPage
             onGoBack={() => setCurrentScreen('Landing Page')}
             onGoToRegister={() => setCurrentScreen('Register')}
-            onSignedIn={() => setCurrentScreen('Home')}
+            onForgotPassword={() => setCurrentScreen('Forgot Password')}
+            onSignedIn={() => {
+              if (hasCompletedOnboarding === false) {
+                setCurrentScreen('Profile Setup');
+              } else {
+                setCurrentScreen('Home');
+              }
+            }}
+          />
+        );
+      case 'Forgot Password':
+        return (
+          <PasswordResetPage
+            mode="request"
+            onGoBack={() => setCurrentScreen('Login')}
+            onDone={() => setCurrentScreen('Home')}
+          />
+        );
+      case 'Reset Password':
+        return (
+          <PasswordResetPage
+            mode="update"
+            onGoBack={() => setCurrentScreen('Login')}
+            onDone={async () => {
+              await reloadUserData();
+              setCurrentScreen('Home');
+            }}
           />
         );
       case 'Register':
@@ -128,7 +183,7 @@ function AppContent() {
         return (
           <MeasurementsPage
             initialValues={measurements}
-            onBack={() => setCurrentScreen('Register')}
+            onBack={() => setCurrentScreen('Home')}
             onChange={setMeasurements}
             onContinue={() => setCurrentScreen('Activity Setup')}
           />

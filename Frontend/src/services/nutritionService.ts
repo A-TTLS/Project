@@ -101,8 +101,11 @@ export function calculateNutritionTargets(params: {
   const remainingKcal = Math.max(0, targetCalories - proteinGrams * 4 - fatGrams * 9);
   const carbsGrams = Math.round(remainingKcal / 4);
 
+  // Exact match to Protein * 4 + Carbs * 4 + Fat * 9
+  const exactDailyCalories = proteinGrams * 4 + carbsGrams * 4 + fatGrams * 9;
+
   return {
-    dailyCalories: targetCalories,
+    dailyCalories: exactDailyCalories,
     proteinGrams,
     carbsGrams,
     fatGrams,

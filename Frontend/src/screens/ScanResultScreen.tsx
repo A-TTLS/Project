@@ -4,6 +4,7 @@ import { useApp } from '../context/AppContext';
 import { Screen, Row, Txt, Pill, IconBox, Card, Btn, SectionHead, c } from '../ui';
 import { uploadMealImage } from '../services/mealImageUpload';
 import type { VisionFoodItem } from '../services/visionService';
+import { BackArrowIcon, RetakeCameraIcon } from '../components/CameraIcons';
 
 interface ScanResultScreenProps {
   onNavigate: (screen: string) => void;
@@ -11,6 +12,34 @@ interface ScanResultScreenProps {
 
 interface NutritionChoice extends VisionFoodItem {
   key: string;
+}
+
+function RetakeButton({ label, onPress, marginTop = 0 }: { label: string; onPress: () => void; marginTop?: number }) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onPress={onPress}
+      style={({ pressed }: { pressed: boolean }) => ({
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        marginTop,
+        paddingVertical: 10,
+        paddingHorizontal: 14,
+        borderRadius: 12,
+        backgroundColor: '#FDE68A',
+        borderWidth: 1,
+        borderColor: '#F59E0B',
+        transform: [{ scale: pressed ? 0.98 : 1 }],
+        cursor: 'pointer' as const,
+      })}
+    >
+      <RetakeCameraIcon frameColor="#1E293B" arrowColor="#F59E0B" />
+      <Txt s={14} w="700" color="#1E293B">{label}</Txt>
+    </Pressable>
+  );
 }
 
 export default function ScanResultScreen({ onNavigate }: ScanResultScreenProps) {
@@ -113,7 +142,7 @@ export default function ScanResultScreen({ onNavigate }: ScanResultScreenProps) 
 
   if (!editingMeal && !capturedMeal?.visionResult) {
     return (
-      <Screen tab="Scan" onSelectTab={onNavigate}>
+      <Screen hideTabBar onSelectTab={onNavigate}>
         <View style={{ marginTop: 32, padding: 18, borderRadius: 16, backgroundColor: c.card, borderWidth: 1, borderColor: c.line }}>
           <Txt s={20} w="800">No scan yet</Txt>
           <Txt s={13} color={c.mute} style={{ marginTop: 8 }}>
@@ -129,7 +158,7 @@ export default function ScanResultScreen({ onNavigate }: ScanResultScreenProps) 
 
   if (!editingMeal && visionResult?.is_food === false) {
     return (
-      <Screen tab="Scan" onSelectTab={onNavigate}>
+      <Screen hideTabBar onSelectTab={onNavigate}>
         {capturedMeal?.image ? (
           <View style={{ marginHorizontal: -20, marginTop: -24, height: 220, overflow: 'hidden' }}>
             <Image
@@ -144,16 +173,14 @@ export default function ScanResultScreen({ onNavigate }: ScanResultScreenProps) 
           <Txt s={13} color="#7f1d1d" style={{ marginTop: 8 }}>
             {visionResult.rejection_reason || 'Please retake the photo with a plate of food or drink in frame.'}
           </Txt>
-          <Btn bg={c.yellow} onPress={() => onNavigate('Scan')} style={{ marginTop: 18 }}>
-            Retake photo
-          </Btn>
+          <RetakeButton label="Retake photo" onPress={() => onNavigate('Scan')} marginTop={18} />
         </View>
       </Screen>
     );
   }
 
   return (
-    <Screen tab="Scan" onSelectTab={onNavigate}>
+    <Screen hideTabBar onSelectTab={onNavigate}>
       <View style={{ marginHorizontal: -20, marginTop: -36, position: 'relative', height: 260, overflow: 'hidden', backgroundColor: '#1a202c' }}>
         {(capturedMeal?.image || editingMeal?.imageUrl || editingMeal?.image) ? (
           <Image
@@ -167,13 +194,41 @@ export default function ScanResultScreen({ onNavigate }: ScanResultScreenProps) 
           </View>
         )}
         <Row style={{ position: 'absolute', top: 36, left: 20, right: 20, justifyContent: 'space-between', alignItems: 'center' }}>
-          <IconBox label="←" onPress={() => onNavigate('Scan')} />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Back to scanner"
+            onPress={() => onNavigate('Scan')}
+            style={({ pressed }: { pressed: boolean }) => ({
+              width: 44,
+              height: 44,
+              alignItems: 'center',
+              justifyContent: 'center',
+              transform: [{ scale: pressed ? 0.92 : 1 }],
+              cursor: 'pointer' as const,
+            })}
+          >
+            <BackArrowIcon color="#FDE68A" />
+          </Pressable>
           <Pill bg={c.yellow}>{editingMeal ? 'Edit meal' : 'Photo captured'}</Pill>
-          <IconBox label="↺" onPress={() => onNavigate('Scan')} />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Retake photo"
+            onPress={() => onNavigate('Scan')}
+            style={({ pressed }: { pressed: boolean }) => ({
+              width: 44,
+              height: 44,
+              alignItems: 'center',
+              justifyContent: 'center',
+              transform: [{ scale: pressed ? 0.92 : 1 }],
+              cursor: 'pointer' as const,
+            })}
+          >
+            <RetakeCameraIcon />
+          </Pressable>
         </Row>
       </View>
 
-      {editingMeal && <Btn bg={c.card} onPress={() => { setCapturedMeal(null); onNavigate('Scan'); }} style={{ marginTop: 12, borderWidth: 1, borderColor: c.line }}>Retake Photo</Btn>}
+      {editingMeal && <RetakeButton label="Retake photo" onPress={() => { setCapturedMeal(null); onNavigate('Scan'); }} marginTop={12} />}
 
       <Row style={{ marginTop: 18, flexWrap: 'wrap', gap: 6 }}>
         {(['Breakfast', 'Lunch', 'Dinner', 'Snacks'] as const).map((meal) => (
