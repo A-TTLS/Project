@@ -1,4 +1,4 @@
-import React, { useState, type ReactNode } from 'react';
+import React, { useState } from 'react';
 import { View, Pressable, useWindowDimensions } from 'react-native-web';
 import { Card, Row, Txt, Icon, c } from '../ui';
 
@@ -6,21 +6,136 @@ interface WaterIntakeCardProps {
   waterMl: number;
   targetMl?: number;
   onAddWater: (amount: number) => void;
-  /** Optional animated wave backdrop rendered in SCRUM-32 */
-  backdropSlot?: ReactNode;
+}
+
+/**
+ * Animated Dual-Wave Water Fill Background (inspired by RiceCal WaterTank)
+ * Rises smoothly from the bottom of the Water card as hydration increases.
+ */
+function WaterTankWaveBackdrop({ fillPct }: { fillPct: number }) {
+  const clamped = Math.min(100, Math.max(0, fillPct));
+  // Keep a 16% shallow puddle at 0ml and stop around 90% so the animated crest stays visible even at 100%
+  const visualHeightPct = Math.round(16 + clamped * 0.74);
+
+  return (
+    <div
+      aria-hidden="true"
+      style={{
+        position: 'absolute',
+        inset: 0,
+        borderRadius: 20,
+        overflow: 'hidden',
+        pointerEvents: 'none',
+        background: 'linear-gradient(180deg, #FFFFFF 0%, #F0F9FF 100%)',
+        zIndex: 0,
+      }}
+    >
+      {/* Subtle rising bubbles when hydrating */}
+      {clamped > 0 && (
+        <>
+          <div
+            className="cs-bubble-1"
+            style={{
+              position: 'absolute',
+              bottom: 18,
+              left: '22%',
+              width: 7,
+              height: 7,
+              borderRadius: '50%',
+              backgroundColor: 'rgba(255, 255, 255, 0.55)',
+              zIndex: 2,
+            }}
+          />
+          <div
+            className="cs-bubble-2"
+            style={{
+              position: 'absolute',
+              bottom: 14,
+              right: '26%',
+              width: 5,
+              height: 5,
+              borderRadius: '50%',
+              backgroundColor: 'rgba(255, 255, 255, 0.5)',
+              zIndex: 2,
+            }}
+          />
+        </>
+      )}
+
+      {/* Rising water mass */}
+      <div
+        style={{
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          bottom: 0,
+          height: `${visualHeightPct}%`,
+          transition: 'height 0.7s cubic-bezier(0.22, 1, 0.36, 1)',
+        }}
+      >
+        {/* Back wave (slower) */}
+        <svg
+          viewBox="0 0 240 16"
+          preserveAspectRatio="none"
+          className="cs-wave-back"
+          style={{
+            position: 'absolute',
+            top: -12,
+            left: 0,
+            width: '200%',
+            height: 14,
+            display: 'block',
+          }}
+        >
+          <path
+            d="M0 8 Q 30 0, 60 8 T 120 8 T 180 8 T 240 8 L 240 16 L 0 16 Z"
+            fill="rgba(125, 211, 252, 0.36)"
+          />
+        </svg>
+
+        {/* Front wave (livelier) */}
+        <svg
+          viewBox="0 0 240 16"
+          preserveAspectRatio="none"
+          className="cs-wave-front"
+          style={{
+            position: 'absolute',
+            top: -10,
+            left: 0,
+            width: '200%',
+            height: 12,
+            display: 'block',
+          }}
+        >
+          <path
+            d="M0 7 Q 30 14, 60 7 T 120 7 T 180 7 T 240 7 L 240 16 L 0 16 Z"
+            fill="rgba(56, 189, 248, 0.42)"
+          />
+        </svg>
+
+        {/* Solid water body gradient below crest */}
+        <div
+          style={{
+            width: '100%',
+            height: '100%',
+            background: 'linear-gradient(180deg, rgba(56, 189, 248, 0.42) 0%, rgba(14, 165, 233, 0.5) 100%)',
+          }}
+        />
+      </div>
+    </div>
+  );
 }
 
 export function WaterIntakeCard({
   waterMl,
   targetMl = 2000,
   onAddWater,
-  backdropSlot,
 }: WaterIntakeCardProps) {
   const { width } = useWindowDimensions();
   const isCompactPhone = width < 380;
   const [lastAmount, setLastAmount] = useState<number>(250);
 
-  const pct = Math.min(150, Math.round((waterMl / targetMl) * 100));
+  const pct = Math.round((waterMl / targetMl) * 100);
   const progressRatio = Math.min(1, Math.max(0, waterMl / targetMl));
 
   const handleAdd = (amount: number) => {
@@ -36,7 +151,7 @@ export function WaterIntakeCard({
 
   return (
     <Card
-      bg={backdropSlot ? '#FFFFFF' : '#F0F9FF'}
+      bg="#FFFFFF"
       style={{
         flex: 1,
         minWidth: 0,
@@ -47,7 +162,7 @@ export function WaterIntakeCard({
         justifyContent: 'space-between',
       }}
     >
-      {backdropSlot}
+      <WaterTankWaveBackdrop fillPct={pct} />
 
       <View style={{ position: 'relative', zIndex: 2, flex: 1, justifyContent: 'space-between' }}>
         <View>
@@ -105,11 +220,11 @@ export function WaterIntakeCard({
                   strokeDashoffset={2 * Math.PI * 18 * (1 - progressRatio)}
                   strokeLinecap="round"
                   transform="rotate(-90 22 22)"
-                  style={{ transition: 'stroke-dashoffset 0.45s cubic-bezier(0.22, 1, 0.36, 1)' }}
+                  style={{ transition: 'stroke-dashoffset 0.55s cubic-bezier(0.22, 1, 0.36, 1)' }}
                 />
               </svg>
               <View style={{ position: 'absolute' }}>
-                <Txt s={10} w="800" color="#0369A1">{pct}%</Txt>
+                <Txt s={10} w="800" color="#0369A1">{Math.min(150, pct)}%</Txt>
               </View>
             </View>
           </Row>
@@ -132,7 +247,7 @@ export function WaterIntakeCard({
                 height: '100%',
                 backgroundColor: '#0284C7',
                 borderRadius: 3,
-                transition: 'width 0.45s cubic-bezier(0.22, 1, 0.36, 1)' as any,
+                transition: 'width 0.55s cubic-bezier(0.22, 1, 0.36, 1)' as any,
               }}
             />
           </View>

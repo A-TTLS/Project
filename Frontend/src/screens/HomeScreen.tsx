@@ -230,12 +230,52 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
     return (categoryOrder[a.category] || 5) - (categoryOrder[b.category] || 5);
   });
 
-  // ─── Calorie Budget Logic ───
+  // ─── Calorie Budget Logic (SCRUM-32 & SCRUM-33) ───
   const safeGoal = Math.max(1, Math.round(Number(calorieGoal) || 2000));
   const safeConsumed = Math.max(0, Math.round(Number(consumedKcal) || 0));
   const safeBurned = Math.max(0, Math.round(Number(burnedKcal) || 0));
-  const progressPct = Math.min(100, Math.round((safeConsumed / safeGoal) * 100));
+
+  // Uncapped percentage so exceeding goal displays real intake share (e.g. 123%)
+  const progressPct = Math.round((safeConsumed / safeGoal) * 100);
+  const isOverTarget = safeConsumed > safeGoal;
+  const isGoalMet = safeConsumed === safeGoal;
+  const isNearGoal = !isOverTarget && !isGoalMet && progressPct >= 90;
+
+  const overKcal = Math.max(0, safeConsumed - safeGoal);
   const remainingKcal = Math.max(0, safeGoal - safeConsumed);
+
+  // Adaptive color tokens (Blue -> Amber near 90% -> Green at 100% -> Coral Red when >100%)
+  const budgetCardBg = isOverTarget
+    ? '#FFF1F2'
+    : isGoalMet
+      ? '#ECFDF5'
+      : c.blue;
+  const ringTrackColor = isOverTarget
+    ? '#FECDD3'
+    : isGoalMet
+      ? '#A7F3D0'
+      : isNearGoal
+        ? '#FDE68A'
+        : '#BAE6FD';
+  const ringProgressColor = isOverTarget
+    ? '#FB7185'
+    : isGoalMet
+      ? '#16A34A'
+      : isNearGoal
+        ? '#D97706'
+        : '#0284C7';
+  const budgetAccentColor = isOverTarget
+    ? '#BE123C'
+    : isGoalMet
+      ? '#15803D'
+      : isNearGoal
+        ? '#B45309'
+        : '#0369A1';
+  const budgetDividerColor = isOverTarget
+    ? '#FECDD3'
+    : isGoalMet
+      ? '#BBF7D0'
+      : '#BAE0F3';
 
   // ─── Manual Target Setting Handlers (SCRUM-15) ───
   const handleOpenTargetModal = () => {
@@ -430,16 +470,33 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
         <Txt s={11} color={c.mute}>Keep your rhythm</Txt>
       </Row>
 
-      {/* ─── Main Calorie Budget Ring Card (SCRUM-33) ─── */}
-      <Card bg={c.blue} style={{ alignItems: 'center', paddingVertical: 18, marginBottom: 12 }}>
+      {/* ─── Main Calorie Budget Ring Card (SCRUM-32 & SCRUM-33) ─── */}
+      <Card bg={budgetCardBg} style={{ alignItems: 'center', paddingVertical: 18, marginBottom: 12 }}>
         <Row style={{ alignSelf: 'stretch', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
           <View style={{ flex: 1, minWidth: 0 }}>
-            <Txt s={11} color="#0369A1" w="700" style={{ letterSpacing: 0.5 }}>
+            <Txt s={11} color={budgetAccentColor} w="700" style={{ letterSpacing: 0.5 }}>
               DAILY CALORIE BUDGET
             </Txt>
-            <Txt s={isCompactPhone ? 17 : 19} w="800" color={c.ink} style={{ marginTop: 2 }}>
-              {progressPct}% of Goal
-            </Txt>
+            <Row style={{ alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 2 }}>
+              <Txt s={isCompactPhone ? 17 : 19} w="800" color={isOverTarget ? '#BE123C' : c.ink}>
+                {progressPct}% of Goal
+              </Txt>
+              {isOverTarget && (
+                <View style={{ backgroundColor: '#FFE4E6', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8, borderWidth: 1, borderColor: '#FDA4AF' }}>
+                  <Txt s={10} w="700" color="#BE123C">Over Target</Txt>
+                </View>
+              )}
+              {isNearGoal && (
+                <View style={{ backgroundColor: '#FEF3C7', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 }}>
+                  <Txt s={10} w="700" color="#B45309">Near Goal</Txt>
+                </View>
+              )}
+              {isGoalMet && (
+                <View style={{ backgroundColor: '#DCFCE7', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 }}>
+                  <Txt s={10} w="700" color="#15803D">On Target</Txt>
+                </View>
+              )}
+            </Row>
           </View>
 
           <Pressable
@@ -463,26 +520,28 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
           </Pressable>
         </Row>
 
-        {/* Center Calorie Ring */}
+        {/* Animated Center Calorie Ring */}
         <View style={{ marginVertical: 18, alignItems: 'center', justifyContent: 'center' }}>
           <TwoToneCalorieRing
             size={ringSize}
             strokeWidth={ringStroke}
             consumed={safeConsumed}
             goal={safeGoal}
-            trackColor="#BAE6FD"
-            progressColor="#0284C7"
+            trackColor={ringTrackColor}
+            progressColor={ringProgressColor}
+            overflowColor="#E11D48"
+            pulseWhenFull={progressPct >= 100}
           >
             <View style={{ alignItems: 'center' }}>
               <Txt
                 s={isCompactPhone ? 30 : 34}
                 w="800"
-                color={c.ink}
+                color={isOverTarget ? '#BE123C' : c.ink}
                 style={{ lineHeight: isCompactPhone ? 34 : 38 }}
               >
                 {safeConsumed.toLocaleString()}
               </Txt>
-              <Txt s={11} color={c.mute} style={{ marginTop: 2 }}>
+              <Txt s={11} color={isOverTarget ? '#9F1239' : c.mute} style={{ marginTop: 2 }}>
                 / {safeGoal.toLocaleString()} kcal
               </Txt>
               <View
@@ -491,13 +550,21 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
                   paddingHorizontal: 10,
                   paddingVertical: 3,
                   borderRadius: 999,
-                  backgroundColor: '#FFFFFF',
+                  backgroundColor: isOverTarget
+                    ? '#FFE4E6'
+                    : isGoalMet
+                      ? '#DCFCE7'
+                      : isNearGoal
+                        ? '#FEF3C7'
+                        : '#FFFFFF',
                 }}
               >
-                <Txt s={10} w="700" color="#0369A1" style={{ textAlign: 'center' }}>
-                  {remainingKcal > 0
-                    ? `${remainingKcal.toLocaleString()} kcal left`
-                    : 'Goal achieved! 🎉'}
+                <Txt s={10} w="700" color={budgetAccentColor} style={{ textAlign: 'center' }}>
+                  {isOverTarget
+                    ? `▲ ${overKcal.toLocaleString()} kcal over`
+                    : remainingKcal > 0
+                      ? `${remainingKcal.toLocaleString()} kcal left`
+                      : 'Goal achieved! 🎉'}
                 </Txt>
               </View>
             </View>
@@ -511,25 +578,27 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
             justifyContent: 'space-around',
             paddingTop: 14,
             borderTopWidth: 1,
-            borderColor: '#BAE0F3',
+            borderColor: budgetDividerColor,
           }}
         >
           <View style={{ alignItems: 'center', flex: 1 }}>
-            <Txt s={11} color="#0369A1">Eaten</Txt>
-            <Txt s={isCompactPhone ? 13 : 15} w="800" color={c.ink}>
+            <Txt s={11} color={budgetAccentColor}>Eaten</Txt>
+            <Txt s={isCompactPhone ? 13 : 15} w="800" color={isOverTarget ? '#BE123C' : c.ink}>
               {safeConsumed.toLocaleString()} kcal
             </Txt>
           </View>
-          <View style={{ height: 28, width: 1, backgroundColor: '#BAE0F3' }} />
+          <View style={{ height: 28, width: 1, backgroundColor: budgetDividerColor }} />
           <View style={{ alignItems: 'center', flex: 1 }}>
-            <Txt s={11} color="#0369A1">Target</Txt>
+            <Txt s={11} color={budgetAccentColor}>Target</Txt>
             <Txt s={isCompactPhone ? 13 : 15} w="800">{safeGoal.toLocaleString()} kcal</Txt>
           </View>
-          <View style={{ height: 28, width: 1, backgroundColor: '#BAE0F3' }} />
+          <View style={{ height: 28, width: 1, backgroundColor: budgetDividerColor }} />
           <View style={{ alignItems: 'center', flex: 1 }}>
-            <Txt s={11} color="#0369A1">Remaining</Txt>
-            <Txt s={isCompactPhone ? 13 : 15} w="800" color={c.ink}>
-              {remainingKcal.toLocaleString()} kcal
+            <Txt s={11} color={budgetAccentColor}>
+              {isOverTarget ? 'Over By' : 'Remaining'}
+            </Txt>
+            <Txt s={isCompactPhone ? 13 : 15} w="800" color={isOverTarget ? '#E11D48' : c.ink}>
+              {isOverTarget ? `+${overKcal.toLocaleString()}` : remainingKcal.toLocaleString()} kcal
             </Txt>
           </View>
         </Row>
@@ -627,6 +696,7 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
                       height: '100%',
                       backgroundColor: over ? '#E11D48' : macro.color,
                       borderRadius: 4,
+                      transition: 'width 0.55s cubic-bezier(0.22, 1, 0.36, 1)' as any,
                     }}
                   />
                 </View>
@@ -636,7 +706,7 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
         </View>
       </Card>
 
-      {/* ─── Hydration & Activity Dashboard Widgets (PR #14 + Mobile Responsive) ─── */}
+      {/* ─── Hydration (Animated Waves) & Activity (Animated Runner) Widgets ─── */}
       <View
         style={{
           flexDirection: stackMetricCards ? 'column' : 'row',
@@ -780,74 +850,80 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
 
       {/* ─── Chronological Meals List ─── */}
       <View style={{ gap: 10, marginBottom: 24 }}>
-        {timeOrderMeals.map((meal) => (
-          <Card key={meal.id} style={{ padding: isCompactPhone ? 12 : 14 }}>
-            <Row style={{ justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-              <Row style={{ alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
-                <View
-                  style={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: 14,
-                    backgroundColor:
-                      meal.category === 'Breakfast' ? '#FFEFA0'
-                      : meal.category === 'Lunch' ? '#DDF0D3'
-                      : meal.category === 'Dinner' ? '#D8EDF8' : '#FBDAD6',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexShrink: 0,
-                  }}
-                >
-                  {meal.imageUrl || meal.image ? (
-                    <Image source={{ uri: meal.imageUrl || meal.image }} style={{ width: 44, height: 44, borderRadius: 14, objectFit: 'cover' as const }} />
-                  ) : (
-                    <Txt s={22} style={{ textAlign: 'center', lineHeight: 26 }}>{getMealEmoji(meal.name, meal.category)}</Txt>
-                  )}
-                </View>
+        {timeOrderMeals.map((meal, idx) => (
+          <div
+            key={meal.id}
+            className="cs-fade-in-up"
+            style={{ animationDelay: `${Math.min(idx, 8) * 0.05}s` }}
+          >
+            <Card style={{ padding: isCompactPhone ? 12 : 14 }}>
+              <Row style={{ justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                <Row style={{ alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
+                  <View
+                    style={{
+                      width: 44,
+                      height: 44,
+                      borderRadius: 14,
+                      backgroundColor:
+                        meal.category === 'Breakfast' ? '#FFEFA0'
+                        : meal.category === 'Lunch' ? '#DDF0D3'
+                        : meal.category === 'Dinner' ? '#D8EDF8' : '#FBDAD6',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                    }}
+                  >
+                    {meal.imageUrl || meal.image ? (
+                      <Image source={{ uri: meal.imageUrl || meal.image }} style={{ width: 44, height: 44, borderRadius: 14, objectFit: 'cover' as const }} />
+                    ) : (
+                      <Txt s={22} style={{ textAlign: 'center', lineHeight: 26 }}>{getMealEmoji(meal.name, meal.category)}</Txt>
+                    )}
+                  </View>
 
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <Txt s={14} w="700">{meal.name}</Txt>
-                  <Txt s={11} color={c.mute} style={{ marginTop: 2 }}>
-                    {meal.category} · {meal.time || 'Logged'}
-                  </Txt>
-                  <Txt s={10} color={c.mute}>
-                    P:{meal.protein}g · C:{meal.carbs}g · F:{meal.fat}g
-                  </Txt>
-                </View>
-              </Row>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Txt s={14} w="700">{meal.name}</Txt>
+                    <Txt s={11} color={c.mute} style={{ marginTop: 2 }}>
+                      {meal.category} · {meal.time || 'Logged'}
+                    </Txt>
+                    <Txt s={10} color={c.mute}>
+                      P:{meal.protein}g · C:{meal.carbs}g · F:{meal.fat}g
+                    </Txt>
+                  </View>
+                </Row>
 
-              <Row style={{ alignItems: 'center', gap: 5, flexShrink: 0 }}>
-                <View style={{ alignItems: 'flex-end', marginRight: 2 }}>
-                  <Txt s={14} w="800">{meal.kcal}</Txt>
-                  <Txt s={10} color={c.mute}>kcal</Txt>
-                </View>
-                <Pressable
-                  accessibilityLabel={`Edit ${meal.name}`}
-                  onPress={() => setMealToEdit(meal)}
-                  style={{
-                    padding: 6,
-                    borderRadius: 8,
-                    backgroundColor: '#F3F4F6',
-                    cursor: 'pointer' as any,
-                  }}
-                >
-                  <Icon name="edit" size={15} color={c.ink} />
-                </Pressable>
-                <Pressable
-                  accessibilityLabel={`Delete ${meal.name}`}
-                  onPress={() => setMealToDelete(meal)}
-                  style={{
-                    padding: 6,
-                    borderRadius: 8,
-                    backgroundColor: '#FEE2E2',
-                    cursor: 'pointer' as any,
-                  }}
-                >
-                  <Icon name="trash" size={15} color="#DC2626" />
-                </Pressable>
+                <Row style={{ alignItems: 'center', gap: 5, flexShrink: 0 }}>
+                  <View style={{ alignItems: 'flex-end', marginRight: 2 }}>
+                    <Txt s={14} w="800">{meal.kcal}</Txt>
+                    <Txt s={10} color={c.mute}>kcal</Txt>
+                  </View>
+                  <Pressable
+                    accessibilityLabel={`Edit ${meal.name}`}
+                    onPress={() => setMealToEdit(meal)}
+                    style={{
+                      padding: 6,
+                      borderRadius: 8,
+                      backgroundColor: '#F3F4F6',
+                      cursor: 'pointer' as any,
+                    }}
+                  >
+                    <Icon name="edit" size={15} color={c.ink} />
+                  </Pressable>
+                  <Pressable
+                    accessibilityLabel={`Delete ${meal.name}`}
+                    onPress={() => setMealToDelete(meal)}
+                    style={{
+                      padding: 6,
+                      borderRadius: 8,
+                      backgroundColor: '#FEE2E2',
+                      cursor: 'pointer' as any,
+                    }}
+                  >
+                    <Icon name="trash" size={15} color="#DC2626" />
+                  </Pressable>
+                </Row>
               </Row>
-            </Row>
-          </Card>
+            </Card>
+          </div>
         ))}
 
         {timeOrderMeals.length === 0 && (
@@ -865,6 +941,7 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
       {showWorkoutModal && (
         <View style={{ position: 'fixed' as any, top: 0, bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(15, 23, 42, 0.6)', justifyContent: 'center', alignItems: 'center', padding: 14, zIndex: 999 }}>
           <div
+            className="cs-modal-pop"
             style={{
               width: '100%',
               maxWidth: 400,
@@ -961,6 +1038,7 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
       {showAddMealModal && (
         <View style={{ position: 'fixed' as any, top: 0, bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(15, 23, 42, 0.6)', justifyContent: 'center', alignItems: 'center', padding: 14, zIndex: 999 }}>
           <div
+            className="cs-modal-pop"
             style={{
               width: '100%',
               maxWidth: 420,
@@ -1110,6 +1188,7 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
       {showTargetModal && (
         <View style={{ position: 'fixed' as any, top: 0, bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(15, 23, 42, 0.6)', justifyContent: 'center', alignItems: 'center', padding: 14, zIndex: 9999 }}>
           <div
+            className="cs-modal-pop"
             style={{
               width: '100%',
               maxWidth: 420,

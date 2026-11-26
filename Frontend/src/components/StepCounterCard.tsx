@@ -1,4 +1,4 @@
-import React, { useState, type ReactNode } from 'react';
+import React, { useState } from 'react';
 import { View, Pressable, TextInput, useWindowDimensions } from 'react-native-web';
 import { Card, Row, Txt, Btn, Icon, c } from '../ui';
 
@@ -8,8 +8,78 @@ interface StepCounterCardProps {
   workoutMins?: number;
   burnedKcal?: number;
   onUpdateSteps: (newSteps: number) => Promise<void> | void;
-  /** Optional animated runner icon rendered in SCRUM-32 */
-  iconSlot?: ReactNode;
+}
+
+/**
+ * Animated Vector Runner SVG
+ * Smoothly animates arms, legs, bounce, and speed lines.
+ */
+function AnimatedRunnerIcon({ active }: { active: boolean }) {
+  return (
+    <View
+      style={{
+        width: 34,
+        height: 34,
+        borderRadius: 12,
+        backgroundColor: '#DCFCE7',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: '#BBF7D0',
+        flexShrink: 0,
+      }}
+    >
+      <svg
+        width="24"
+        height="24"
+        viewBox="0 0 24 24"
+        fill="none"
+        className="cs-runner-bob"
+        style={{
+          animationDuration: active ? '0.6s' : '1.15s',
+          overflow: 'visible',
+        }}
+      >
+        {/* Speed motion dashes trailing behind */}
+        <line
+          x1="1.5"
+          y1="9.5"
+          x2="6"
+          y2="9.5"
+          stroke="#22C55E"
+          strokeWidth="1.6"
+          strokeLinecap="round"
+          strokeDasharray="3 3"
+          className="cs-runner-trail"
+        />
+        <line
+          x1="2.5"
+          y1="13"
+          x2="7"
+          y2="13"
+          stroke="#4ADE80"
+          strokeWidth="1.4"
+          strokeLinecap="round"
+          strokeDasharray="3 3"
+          className="cs-runner-trail"
+        />
+        {/* Head */}
+        <circle cx="14.5" cy="5.5" r="2.2" fill="#15803D" />
+        {/* Torso leaning slightly forward */}
+        <path d="M13.5 8 L12 13.5" stroke="#15803D" strokeWidth="2.3" strokeLinecap="round" />
+        {/* Back leg + forward arm */}
+        <g className="cs-runner-stride-b" style={{ animationDuration: active ? '0.6s' : '1.15s' }}>
+          <path d="M12 13.5 L8.5 16.5 L6.5 20.5" stroke="#16A34A" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M13 9 L16.5 11.2 L18.2 9.5" stroke="#16A34A" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+        </g>
+        {/* Front leg + trailing arm */}
+        <g className="cs-runner-stride-a" style={{ animationDuration: active ? '0.6s' : '1.15s' }}>
+          <path d="M12 13.5 L15.5 16 L16 20.5" stroke="#15803D" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M13 9 L9.8 11 L8 12.8" stroke="#15803D" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+        </g>
+      </svg>
+    </View>
+  );
 }
 
 export function StepCounterCard({
@@ -18,7 +88,6 @@ export function StepCounterCard({
   workoutMins = 0,
   burnedKcal = 0,
   onUpdateSteps,
-  iconSlot,
 }: StepCounterCardProps) {
   const { width } = useWindowDimensions();
   const isCompactPhone = width < 380;
@@ -66,26 +135,10 @@ export function StepCounterCard({
         }}
       >
         <View>
-          {/* Header */}
+          {/* Header with Animated Runner SVG */}
           <Row style={{ justifyContent: 'space-between', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
             <Row style={{ alignItems: 'center', gap: 7, minWidth: 0 }}>
-              {iconSlot || (
-                <View
-                  style={{
-                    width: 30,
-                    height: 30,
-                    borderRadius: 10,
-                    backgroundColor: '#DCFCE7',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    borderWidth: 1,
-                    borderColor: '#BBF7D0',
-                    flexShrink: 0,
-                  }}
-                >
-                  <Icon name="footprints" size={16} color="#15803D" />
-                </View>
-              )}
+              <AnimatedRunnerIcon active={stepsCount > 0 || workoutMins > 0} />
               <Txt s={13} w="700" color="#14532D">Activity & Steps</Txt>
             </Row>
             <Txt s={10} w="600" color={c.mute}>Goal {goalSteps.toLocaleString()}</Txt>
@@ -124,7 +177,7 @@ export function StepCounterCard({
                   strokeDashoffset={2 * Math.PI * 18 * (1 - progressRatio)}
                   strokeLinecap="round"
                   transform="rotate(-90 22 22)"
-                  style={{ transition: 'stroke-dashoffset 0.45s cubic-bezier(0.22, 1, 0.36, 1)' }}
+                  style={{ transition: 'stroke-dashoffset 0.55s cubic-bezier(0.22, 1, 0.36, 1)' }}
                 />
               </svg>
               <View style={{ position: 'absolute' }}>
@@ -151,7 +204,7 @@ export function StepCounterCard({
                 height: '100%',
                 backgroundColor: '#16A34A',
                 borderRadius: 3,
-                transition: 'width 0.45s cubic-bezier(0.22, 1, 0.36, 1)' as any,
+                transition: 'width 0.55s cubic-bezier(0.22, 1, 0.36, 1)' as any,
               }}
             />
           </View>
@@ -234,32 +287,23 @@ export function StepCounterCard({
             zIndex: 1000,
           }}
         >
-          <View
+          <div
+            className="cs-modal-pop"
             style={{
               width: '100%',
               maxWidth: 360,
               backgroundColor: c.card,
               borderRadius: 22,
               padding: 20,
+              display: 'flex',
+              flexDirection: 'column',
               gap: 14,
               boxShadow: '0 20px 40px rgba(0,0,0,0.25)',
             }}
           >
             <Row style={{ justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
               <Row style={{ alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
-                <View
-                  style={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: 16,
-                    backgroundColor: '#DCFCE7',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexShrink: 0,
-                  }}
-                >
-                  <Icon name="footprints" size={16} color="#15803D" />
-                </View>
+                <AnimatedRunnerIcon active />
                 <Txt s={18} w="800">Edit Today's Steps</Txt>
               </Row>
               <Pressable onPress={() => setShowEditModal(false)} style={{ padding: 4, flexShrink: 0 }}>
@@ -358,7 +402,7 @@ export function StepCounterCard({
                 </Txt>
               </Btn>
             </Row>
-          </View>
+          </div>
         </View>
       )}
     </>
