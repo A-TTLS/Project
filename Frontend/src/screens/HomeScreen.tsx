@@ -21,14 +21,43 @@ interface HomeScreenProps {
   onNavigate: (screen: string) => void;
 }
 
-const WORKOUT_KCAL_PER_MIN: Record<string, number> = {
-  'Afternoon strength': 3.5,
-  'Strength training': 3.5,
-  'Campus walk': 4.0,
-  'Running / Jogging': 8.0,
-  'Cycling': 6.5,
-  'Badminton / Sports': 7.0,
-};
+const QUICK_WORKOUT_TYPES = [
+  'Afternoon strength',
+  'Push up',
+  'Cycling',
+  'Pilates',
+  'Campus walk',
+  'Running',
+];
+
+/**
+ * Estimates kcal/min based on workout type + user weight (falls back cleanly if weight is missing)
+ * Uses MET-style rates: kcal = MET * weightKg * (minutes / 60)
+ */
+function estimateWorkoutCalories(minutes: number, workoutType: string, weightKg = 55): number {
+  const mins = Math.max(0, Number(minutes) || 0);
+  if (mins <= 0) return 0;
+
+  const label = (workoutType || '').toLowerCase();
+  const safeWeight = Number(weightKg) > 0 ? Number(weightKg) : 55;
+
+  let met = 4.0; // default moderate activity
+  if (label.includes('push') || label.includes('strength') || label.includes('gym') || label.includes('weight')) {
+    met = 4.5;
+  } else if (label.includes('cycl') || label.includes('bike') || label.includes('spin')) {
+    met = 6.8;
+  } else if (label.includes('pilates') || label.includes('yoga') || label.includes('stretch')) {
+    met = 3.2;
+  } else if (label.includes('run') || label.includes('jog') || label.includes('hiit') || label.includes('cardio')) {
+    met = 8.0;
+  } else if (label.includes('walk') || label.includes('stroll')) {
+    met = 3.5;
+  } else if (label.includes('badminton') || label.includes('futsal') || label.includes('sport') || label.includes('swim')) {
+    met = 7.0;
+  }
+
+  return Math.max(1, Math.round(met * safeWeight * (mins / 60)));
+}
 
 function getMealEmoji(name: string, category: string): string {
   const n = (name || '').toLowerCase();
@@ -130,7 +159,6 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
   const logWorkoutFn: ((mins: number, kcal: number, label?: string) => Promise<void> | void) | undefined =
     appContext.logWorkout;
 
-  // Water history stack for reliable Undo (Ctrl+Z style)
   const [waterHistory, setWaterHistory] = useState<number[]>([]);
   const [localSteps, setLocalSteps] = useState<number>(0);
   const [localWorkoutMins, setLocalWorkoutMins] = useState<number>(0);
@@ -149,7 +177,9 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
   // Workout Modal State
   const [showWorkoutModal, setShowWorkoutModal] = useState(false);
   const [workoutInputMins, setWorkoutInputMins] = useState('30');
-  const [workoutInputKcal, setWorkoutInputKcal] = useState('105');
+  const [workoutInputKcal, setWorkoutInputKcal] = useState(() =>
+    String(estimateWorkoutCalories(30, 'Afternoon strength', currentWeight))
+  );
   const [workoutInputLabel, setWorkoutInputLabel] = useState('Afternoon strength');
   const [kcalManuallyEdited, setKcalManuallyEdited] = useState(false);
 
@@ -198,12 +228,21 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
     setShowStepsModal(false);
   };
 
+  const handleOpenWorkoutModal = () => {
+    const defaultMins = 30;
+    const defaultLabel = 'Afternoon strength';
+    setKcalManuallyEdited(false);
+    setWorkoutInputLabel(defaultLabel);
+    setWorkoutInputMins(String(defaultMins));
+    setWorkoutInputKcal(String(estimateWorkoutCalories(defaultMins, defaultLabel, currentWeight)));
+    setShowWorkoutModal(true);
+  };
+
   const handleWorkoutMinutesChange = (val: string) => {
     setWorkoutInputMins(val);
     if (!kcalManuallyEdited) {
       const mins = Math.max(0, parseInt(val, 10) || 0);
-      const rate = WORKOUT_KCAL_PER_MIN[workoutInputLabel] ?? 4.0;
-      setWorkoutInputKcal(String(Math.round(mins * rate)));
+      setWorkoutInputKcal(String(estimateWorkoutCalories(mins, workoutInputLabel, currentWeight)));
     }
   };
 
@@ -211,15 +250,16 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
     setWorkoutInputLabel(val);
     if (!kcalManuallyEdited) {
       const mins = Math.max(0, parseInt(workoutInputMins, 10) || 0);
-      const rate = WORKOUT_KCAL_PER_MIN[val] ?? 4.0;
-      setWorkoutInputKcal(String(Math.round(mins * rate)));
+      setWorkoutInputKcal(String(estimateWorkoutCalories(mins, val, currentWeight)));
     }
   };
 
   const handleSaveWorkout = async () => {
     const mins = Math.max(0, parseInt(workoutInputMins, 10) || 0);
-    const kcal = Math.max(0, parseInt(workoutInputKcal, 10) || 0);
     const label = workoutInputLabel.trim() || 'Campus workout';
+    const kcal = kcalManuallyEdited
+      ? Math.max(0, parseInt(workoutInputKcal, 10) || 0)
+      : estimateWorkoutCalories(mins, label, currentWeight);
 
     if (mins <= 0 && kcal <= 0) {
       showToast('⚠️ Enter workout minutes or calories burned');
@@ -579,7 +619,7 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
             </View>
           </Pressable>
 
-          {/* 2. Water Card (with Undo button) */}
+          {/* 2. Water Card */}
           <View
             style={{
               flex: 1,
@@ -658,7 +698,7 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
 
         {/* Row 2: Steps + Workout */}
         <Row style={{ gap: 12, alignItems: 'stretch' }}>
-          {/* 3. Steps Card (with quick + button) */}
+          {/* 3. Steps Card */}
           <View
             style={{
               flex: 1,
@@ -744,10 +784,7 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
               <Txt s={13} w="600" color="#5C362C">Workout</Txt>
               <Pressable
                 accessibilityLabel="Log workout"
-                onPress={() => {
-                  setKcalManuallyEdited(false);
-                  setShowWorkoutModal(true);
-                }}
+                onPress={handleOpenWorkoutModal}
                 style={{
                   width: 28,
                   height: 28,
@@ -1012,12 +1049,36 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
               </Pressable>
             </Row>
 
-            <View style={{ gap: 4 }}>
-              <Txt s={12} color={c.mute}>Activity Label</Txt>
+            <View style={{ gap: 6 }}>
+              <Txt s={12} color={c.mute}>Workout Type</Txt>
+              <Row style={{ flexWrap: 'wrap', gap: 6 }}>
+                {QUICK_WORKOUT_TYPES.map((typeName) => {
+                  const active = workoutInputLabel.toLowerCase() === typeName.toLowerCase();
+                  return (
+                    <Pressable
+                      key={typeName}
+                      onPress={() => {
+                        setKcalManuallyEdited(false);
+                        handleWorkoutLabelChange(typeName);
+                      }}
+                      style={{
+                        paddingHorizontal: 10,
+                        paddingVertical: 6,
+                        borderRadius: 999,
+                        backgroundColor: active ? c.yellow : c.bg,
+                        borderWidth: 1,
+                        borderColor: active ? c.ink : c.line,
+                      }}
+                    >
+                      <Txt s={11} w={active ? '700' : '500'}>{typeName}</Txt>
+                    </Pressable>
+                  );
+                })}
+              </Row>
               <TextInput
                 value={workoutInputLabel}
                 onChangeText={handleWorkoutLabelChange}
-                placeholder="e.g. Afternoon strength"
+                placeholder="Type any workout (e.g. Push up, Cycling, Pilates)"
                 placeholderTextColor="#94A3B8"
                 style={{ borderWidth: 1, borderColor: c.line, borderRadius: 12, padding: 10, fontSize: 14, backgroundColor: '#FFFFFF', color: '#1E293B' }}
               />
