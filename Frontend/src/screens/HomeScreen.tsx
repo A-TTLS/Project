@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Pressable, TextInput, ScrollView, Image } from 'react-native-web';
+import { View, Pressable, TextInput, ScrollView, Image, useWindowDimensions } from 'react-native-web';
 import { useApp, WeightLogItem } from '../context/AppContext';
 import { loadLocalFoods, searchLocalFoods, LocalFood } from '../services/localFoodSearch';
 import {
@@ -98,6 +98,34 @@ function buildRealWeightSparkline(logs: WeightLogItem[], width = 120, height = 4
   const values = logs
     .map((entry) => Number(entry.weightKg))
     .filter((v) => Number.isFinite(v) && v > 0);
+
+  if (values.length < 2) {
+    const midY = height / 2;
+    return `M 4 ${midY} L ${width - 4} ${midY}`;
+  }
+
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const padX = 4;
+  const padY = 6;
+  const usableW = width - padX * 2;
+  const usableH = height - padY * 2;
+
+  const pts = values.map((val, idx) => {
+    const x = padX + (idx / (values.length - 1)) * usableW;
+    const norm = max === min ? 0.5 : (max - val) / (max - min);
+    const y = padY + norm * usableH;
+    return { x, y };
+  });
+
+  return pts.reduce((acc, pt, i, arr) => {
+    if (i === 0) return `M ${pt.x.toFixed(1)} ${pt.y.toFixed(1)}`;
+    const prev = arr[i - 1];
+    const cx = ((prev.x + pt.x) / 2).toFixed(1);
+    return `${acc} C ${cx} ${prev.y.toFixed(1)}, ${cx} ${pt.y.toFixed(1)}, ${pt.x.toFixed(1)} ${pt.y.toFixed(1)}`;
+  }, '');
+}
+
 /**
  * Animated Athlete Lifting Dumbbells SVG for Workout Card
  */
@@ -164,38 +192,7 @@ function AnimatedWorkoutIcon({ active }: { active: boolean }) {
 export default function HomeScreen({ onNavigate }: HomeScreenProps) {
   const { width } = useWindowDimensions();
   const isCompactPhone = width < 380;
-  const stackMetricCards = width < 340;
-  const ringSize = width < 360 ? 156 : width < 400 ? 172 : 186;
-  const ringStroke = width < 360 ? 12 : 14;
 
-  if (values.length < 2) {
-    const midY = height / 2;
-    return `M 4 ${midY} L ${width - 4} ${midY}`;
-  }
-
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const padX = 4;
-  const padY = 6;
-  const usableW = width - padX * 2;
-  const usableH = height - padY * 2;
-
-  const pts = values.map((val, idx) => {
-    const x = padX + (idx / (values.length - 1)) * usableW;
-    const norm = max === min ? 0.5 : (max - val) / (max - min);
-    const y = padY + norm * usableH;
-    return { x, y };
-  });
-
-  return pts.reduce((acc, pt, i, arr) => {
-    if (i === 0) return `M ${pt.x.toFixed(1)} ${pt.y.toFixed(1)}`;
-    const prev = arr[i - 1];
-    const cx = ((prev.x + pt.x) / 2).toFixed(1);
-    return `${acc} C ${cx} ${prev.y.toFixed(1)}, ${cx} ${pt.y.toFixed(1)}, ${pt.x.toFixed(1)} ${pt.y.toFixed(1)}`;
-  }, '');
-}
-
-export default function HomeScreen({ onNavigate }: HomeScreenProps) {
   const {
     userName,
     streakDays,
@@ -838,7 +835,7 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
               flex: 1,
               backgroundColor: '#FCE1D9',
               borderRadius: 24,
-              padding: 16,
+              padding: isCompactPhone ? 14 : 16,
               justifyContent: 'space-between',
               minHeight: 200,
             }}
@@ -862,131 +859,108 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
               </Pressable>
             </Row>
 
-            <View style={{ marginVertical: 6 }}>
-              <Row style={{ alignItems: 'baseline', gap: 4 }}>
-                <Txt s={30} w="800" color="#2B1915">{displayWorkoutMins}</Txt>
-                <Txt s={13} w="500" color="#6E453B">mins</Txt>
-              </Row>
+            <Row style={{ alignItems: 'center', gap: 8, marginVertical: 6 }}>
+              <AnimatedWorkoutIcon active={displayWorkoutMins > 0 || safeBurned > 0} />
+              <View style={{ flex: 1 }}>
+                <Txt s={22} w="800" color="#4A251B">
+                  {displayWorkoutMins}
+                </Txt>
+                <Txt s={11} w="500" color="#7C4A3D">mins logged</Txt>
+              </View>
+            </Row>
 
-              <Txt s={11} w="700" color="#A85A47" style={{ marginTop: 6 }}>
-                {displayBurnedKcal} kcal burned
+            <View>
+              <Txt s={11} w="700" color="#5C362C">
+                {workoutLabel || 'Afternoon strength'}
+              </Txt>
+              <Txt s={11} w="500" color="#7C4A3D" style={{ marginTop: 2 }}>
+                {safeBurned > 0 ? `${safeBurned} kcal burned` : 'Tap + to log session'}
               </Txt>
             </View>
-
-            <Row style={{ alignItems: 'center', gap: 5 }}>
-              <Txt s={12} color="#9E5644">🏋️</Txt>
-              <Txt s={11} w="500" color="#9E5644" numberOfLines={1} style={{ flex: 1 }}>
-                {workoutLabel}
-              </Txt>
-            </Row>
           </View>
         </Row>
       </View>
 
       {/* Today's Meals Section */}
-      <SectionHead
-        title="Today's Meals"
-        right={`${todayMeals.length} logged`}
-      />
+      <View style={{ marginBottom: 24 }}>
+        <SectionHead
+          title="Today's Meals"
+          actionLabel="+ Add Meal"
+          onAction={() => setShowAddMealModal(true)}
+        />
 
-      <Row style={{ gap: 8, marginBottom: 12 }}>
-        <Btn
-          bg={c.yellow}
-          onPress={() => onNavigate('Scan')}
-          style={{ flex: 1, height: 42, borderRadius: 12 }}
-        >
-          <Row style={{ gap: 6, justifyContent: 'center' }}>
-            <Icon name="camera" size={16} color={c.ink} />
-            <Txt s={13} w="700">AI Camera Snap</Txt>
-          </Row>
-        </Btn>
-        <Btn
-          bg={c.card}
-          onPress={() => setShowAddMealModal(true)}
-          style={{ flex: 1, height: 42, borderRadius: 12, borderWidth: 1, borderColor: c.line }}
-        >
-          <Row style={{ gap: 6, justifyContent: 'center' }}>
-            <Icon name="plus" size={14} color={c.ink} />
-            <Txt s={13} w="700">Manual Entry</Txt>
-          </Row>
-        </Btn>
-      </Row>
-
-      {/* Meals List */}
-      <View style={{ gap: 10, marginBottom: 24 }}>
-        {todayMeals.map((meal: any) => (
-          <Card key={meal.id} style={{ padding: 14 }}>
-            <Row style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <Row style={{ alignItems: 'center', gap: 10, flex: 1 }}>
-                <View
-                  style={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: 14,
-                    backgroundColor:
-                      meal.category === 'Breakfast'
-                        ? '#FFEFA0'
-                        : meal.category === 'Lunch'
-                        ? '#DDF0D3'
-                        : meal.category === 'Dinner'
-                        ? '#D8EDF8'
-                        : '#FBDAD6',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexShrink: 0,
-                  }}
-                >
-                  {meal.imageUrl || meal.image ? (
-                    <Image
-                      source={{ uri: meal.imageUrl || meal.image }}
-                      style={{ width: 44, height: 44, borderRadius: 14, objectFit: 'cover' as const }}
-                    />
-                  ) : (
-                    <Txt s={22} style={{ textAlign: 'center', lineHeight: 26 }}>
-                      {getMealEmoji(meal.name, meal.category)}
-                    </Txt>
-                  )}
-                </View>
-
-                <View style={{ flex: 1 }}>
-                  <Row style={{ alignItems: 'center', gap: 6 }}>
-                    <Txt s={14} w="700">{meal.name}</Txt>
+        {todayMeals && todayMeals.length > 0 ? (
+          <View style={{ gap: 10 }}>
+            {todayMeals.map((meal: any, idx: number) => (
+              <Card key={meal.id || idx} style={{ padding: 14 }}>
+                <Row style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Row style={{ alignItems: 'center', gap: 12, flex: 1 }}>
+                    <View
+                      style={{
+                        width: 42,
+                        height: 42,
+                        borderRadius: 14,
+                        backgroundColor: '#F8FAFC',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      {meal.imageUri ? (
+                        <Image
+                          source={{ uri: meal.imageUri }}
+                          style={{ width: 42, height: 42, borderRadius: 14 }}
+                        />
+                      ) : (
+                        <Txt s={20}>{getMealEmoji(meal.name, meal.category)}</Txt>
+                      )}
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Txt w="700">{meal.name}</Txt>
+                      <Txt s={11} color={c.mute}>
+                        {meal.meta || meal.category} · P: {meal.protein ?? 0}g · C: {meal.carbs ?? 0}g · F: {meal.fat ?? 0}g
+                      </Txt>
+                    </View>
                   </Row>
-                  <Txt s={11} color={c.mute}>
-                    {meal.category} · {meal.time || 'Logged'} · P: {meal.protein}g · C: {meal.carbs}g · F: {meal.fat}g
-                  </Txt>
-                </View>
-              </Row>
 
-              <Row style={{ alignItems: 'center', gap: 8 }}>
-                <Txt s={15} w="800">{meal.kcal} <Txt s={11} color={c.mute}>kcal</Txt></Txt>
-                <Pressable
-                  accessibilityLabel={`Edit ${meal.name}`}
-                  onPress={() => {
-                    setEditingMeal(meal);
-                    setCapturedMeal(null);
-                    onNavigate('Scan Result');
-                  }}
-                  style={{ padding: 4 }}
-                >
-                  <Icon name="edit" size={16} color={c.ink} />
-                </Pressable>
-                <Pressable
-                  onPress={() => deleteMeal(meal.id)}
-                  style={{ padding: 4 }}
-                >
-                  <Icon name="trash" size={16} color="#C0504A" />
-                </Pressable>
-              </Row>
-            </Row>
-          </Card>
-        ))}
-
-        {todayMeals.length === 0 && (
-          <Card style={{ alignItems: 'center', paddingVertical: 32 }}>
-            <Icon name="camera" size={32} color={c.mute} />
-            <Txt s={15} w="700" style={{ marginTop: 8 }}>No meals logged yet today</Txt>
-            <Txt s={12} color={c.mute} style={{ marginTop: 4 }}>Snap your plate or log a meal to start your streak!</Txt>
+                  <Row style={{ alignItems: 'center', gap: 8 }}>
+                    <Txt w="800" color="#0284C7">{meal.kcal} kcal</Txt>
+                    {typeof setEditingMeal === 'function' && (
+                      <Pressable
+                        accessibilityLabel="Edit meal"
+                        onPress={() => {
+                          setEditingMeal(meal);
+                          if (typeof setCapturedMeal === 'function') {
+                            setCapturedMeal(meal);
+                          }
+                          onNavigate('Scan');
+                        }}
+                        style={{ padding: 4 }}
+                      >
+                        <Txt s={12} color={c.mute}>✏️</Txt>
+                      </Pressable>
+                    )}
+                    {typeof deleteMeal === 'function' && meal.id && (
+                      <Pressable
+                        accessibilityLabel="Delete meal"
+                        onPress={() => deleteMeal(meal.id)}
+                        style={{ padding: 4 }}
+                      >
+                        <Txt s={12} color="#EF4444">🗑️</Txt>
+                      </Pressable>
+                    )}
+                  </Row>
+                </Row>
+              </Card>
+            ))}
+          </View>
+        ) : (
+          <Card style={{ alignItems: 'center', paddingVertical: 24 }}>
+            <Txt s={13} color={c.mute} style={{ marginBottom: 10 }}>
+              No meals logged yet today.
+            </Txt>
+            <Btn bg={c.blue} onPress={() => setShowAddMealModal(true)}>
+              + Log Your First Meal
+            </Btn>
           </Card>
         )}
       </View>
@@ -1011,11 +985,11 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
             <Row style={{ justifyContent: 'space-between', alignItems: 'center' }}>
               <Txt s={18} w="800">Log Weight</Txt>
               <Pressable onPress={() => setShowWeightModal(false)}>
-                <Icon name="close" size={20} color={c.mute} />
+                <Txt s={18} color={c.mute}>✕</Txt>
               </Pressable>
             </Row>
 
-            <View style={{ gap: 4 }}>
+            <View style={{ gap: 6 }}>
               <Txt s={12} color={c.mute}>Current Weight (kg)</Txt>
               <TextInput
                 value={weightInputKg}
@@ -1023,18 +997,32 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
                 inputMode="decimal"
                 placeholder="e.g. 54.5"
                 placeholderTextColor="#94A3B8"
-                style={{ borderWidth: 1, borderColor: c.line, borderRadius: 12, padding: 10, fontSize: 14, backgroundColor: '#FFFFFF', color: '#1E293B' }}
+                style={{
+                  borderWidth: 1,
+                  borderColor: c.line,
+                  borderRadius: 12,
+                  padding: 10,
+                  fontSize: 14,
+                  color: '#1E293B',
+                }}
               />
             </View>
 
-            <View style={{ gap: 4 }}>
+            <View style={{ gap: 6 }}>
               <Txt s={12} color={c.mute}>Note (optional)</Txt>
               <TextInput
                 value={weightInputNote}
                 onChangeText={setWeightInputNote}
                 placeholder="e.g. Morning weigh-in"
                 placeholderTextColor="#94A3B8"
-                style={{ borderWidth: 1, borderColor: c.line, borderRadius: 12, padding: 10, fontSize: 14, backgroundColor: '#FFFFFF', color: '#1E293B' }}
+                style={{
+                  borderWidth: 1,
+                  borderColor: c.line,
+                  borderRadius: 12,
+                  padding: 10,
+                  fontSize: 14,
+                  color: '#1E293B',
+                }}
               />
             </View>
 
@@ -1065,24 +1053,31 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
             <Row style={{ justifyContent: 'space-between', alignItems: 'center' }}>
               <Txt s={18} w="800">Add Campus Steps</Txt>
               <Pressable onPress={() => setShowStepsModal(false)}>
-                <Icon name="close" size={20} color={c.mute} />
+                <Txt s={18} color={c.mute}>✕</Txt>
               </Pressable>
             </Row>
 
-            <View style={{ gap: 4 }}>
+            <View style={{ gap: 6 }}>
               <Txt s={12} color={c.mute}>Steps to Add</Txt>
               <TextInput
                 value={stepsInput}
                 onChangeText={setStepsInput}
                 inputMode="numeric"
-                placeholder="e.g. 1500"
+                placeholder="1500"
                 placeholderTextColor="#94A3B8"
-                style={{ borderWidth: 1, borderColor: c.line, borderRadius: 12, padding: 10, fontSize: 14, backgroundColor: '#FFFFFF', color: '#1E293B' }}
+                style={{
+                  borderWidth: 1,
+                  borderColor: c.line,
+                  borderRadius: 12,
+                  padding: 10,
+                  fontSize: 14,
+                  color: '#1E293B',
+                }}
               />
             </View>
 
             <Btn bg={c.yellow} onPress={handleSaveSteps} style={{ marginTop: 4 }}>
-              Add Steps
+              Save Steps
             </Btn>
           </View>
         </View>
@@ -1104,51 +1099,54 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
             zIndex: 999,
           }}
         >
-          <View style={{ width: '100%', maxWidth: 380, backgroundColor: c.card, borderRadius: 24, padding: 22, gap: 14 }}>
+          <View style={{ width: '100%', maxWidth: 400, backgroundColor: c.card, borderRadius: 24, padding: 22, gap: 12 }}>
             <Row style={{ justifyContent: 'space-between', alignItems: 'center' }}>
               <Txt s={18} w="800">Log Workout</Txt>
               <Pressable onPress={() => setShowWorkoutModal(false)}>
-                <Icon name="close" size={20} color={c.mute} />
+                <Txt s={18} color={c.mute}>✕</Txt>
               </Pressable>
+            </Row>
+
+            <Row style={{ flexWrap: 'wrap', gap: 6 }}>
+              {QUICK_WORKOUT_TYPES.map((type) => {
+                const selected = workoutInputLabel === type;
+                return (
+                  <Pressable
+                    key={type}
+                    onPress={() => handleWorkoutLabelChange(type)}
+                    style={{
+                      paddingHorizontal: 10,
+                      paddingVertical: 6,
+                      borderRadius: 999,
+                      backgroundColor: selected ? c.yellow : '#F1F5F9',
+                    }}
+                  >
+                    <Txt s={11} w={selected ? '800' : '600'}>{type}</Txt>
+                  </Pressable>
+                );
+              })}
             </Row>
 
             <View style={{ gap: 6 }}>
               <Txt s={12} color={c.mute}>Workout Type</Txt>
-              <Row style={{ flexWrap: 'wrap', gap: 6 }}>
-                {QUICK_WORKOUT_TYPES.map((typeName) => {
-                  const active = workoutInputLabel.toLowerCase() === typeName.toLowerCase();
-                  return (
-                    <Pressable
-                      key={typeName}
-                      onPress={() => {
-                        setKcalManuallyEdited(false);
-                        handleWorkoutLabelChange(typeName);
-                      }}
-                      style={{
-                        paddingHorizontal: 10,
-                        paddingVertical: 6,
-                        borderRadius: 999,
-                        backgroundColor: active ? c.yellow : c.bg,
-                        borderWidth: 1,
-                        borderColor: active ? c.ink : c.line,
-                      }}
-                    >
-                      <Txt s={11} w={active ? '700' : '500'}>{typeName}</Txt>
-                    </Pressable>
-                  );
-                })}
-              </Row>
               <TextInput
                 value={workoutInputLabel}
                 onChangeText={handleWorkoutLabelChange}
-                placeholder="Type any workout (e.g. Push up, Cycling, Pilates)"
+                placeholder="Afternoon strength"
                 placeholderTextColor="#94A3B8"
-                style={{ borderWidth: 1, borderColor: c.line, borderRadius: 12, padding: 10, fontSize: 14, backgroundColor: '#FFFFFF', color: '#1E293B' }}
+                style={{
+                  borderWidth: 1,
+                  borderColor: c.line,
+                  borderRadius: 12,
+                  padding: 10,
+                  fontSize: 14,
+                  color: '#1E293B',
+                }}
               />
             </View>
 
             <Row style={{ gap: 10 }}>
-              <View style={{ flex: 1, gap: 4 }}>
+              <View style={{ flex: 1, gap: 6 }}>
                 <Txt s={12} color={c.mute}>Duration (mins)</Txt>
                 <TextInput
                   value={workoutInputMins}
@@ -1156,11 +1154,19 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
                   inputMode="numeric"
                   placeholder="30"
                   placeholderTextColor="#94A3B8"
-                  style={{ borderWidth: 1, borderColor: c.line, borderRadius: 12, padding: 10, fontSize: 14, backgroundColor: '#FFFFFF', color: '#1E293B' }}
+                  style={{
+                    borderWidth: 1,
+                    borderColor: c.line,
+                    borderRadius: 12,
+                    padding: 10,
+                    fontSize: 14,
+                    color: '#1E293B',
+                  }}
                 />
               </View>
-              <View style={{ flex: 1, gap: 4 }}>
-                <Txt s={12} color={c.mute}>Calories Burned (auto/edit)</Txt>
+
+              <View style={{ flex: 1, gap: 6 }}>
+                <Txt s={12} color={c.mute}>Calories Burned</Txt>
                 <TextInput
                   value={workoutInputKcal}
                   onChangeText={(val) => {
@@ -1168,9 +1174,16 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
                     setWorkoutInputKcal(val);
                   }}
                   inputMode="numeric"
-                  placeholder="105"
+                  placeholder="150"
                   placeholderTextColor="#94A3B8"
-                  style={{ borderWidth: 1, borderColor: c.line, borderRadius: 12, padding: 10, fontSize: 14, backgroundColor: '#FFFFFF', color: '#1E293B' }}
+                  style={{
+                    borderWidth: 1,
+                    borderColor: c.line,
+                    borderRadius: 12,
+                    padding: 10,
+                    fontSize: 14,
+                    color: '#1E293B',
+                  }}
                 />
               </View>
             </Row>
@@ -1202,143 +1215,110 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
             <Row style={{ justifyContent: 'space-between', alignItems: 'center' }}>
               <Txt s={18} w="800">Add Meal Entry</Txt>
               <Pressable onPress={() => { setShowAddMealModal(false); setShowSuggestions(false); }}>
-                <Icon name="close" size={20} color={c.mute} />
+                <Txt s={18} color={c.mute}>✕</Txt>
               </Pressable>
             </Row>
 
-            <View style={{ gap: 4, position: 'relative', zIndex: 100 }}>
-              <Row style={{ justifyContent: 'space-between', alignItems: 'center' }}>
-                <Txt s={12} color={c.mute}>Meal / Dish Name</Txt>
-                {isLoadingFoods && <Txt s={10} color={c.mute}>Loading dataset...</Txt>}
-              </Row>
+            <View style={{ position: 'relative', gap: 6, zIndex: 20 }}>
+              <Txt s={12} color={c.mute}>Meal Name</Txt>
               <TextInput
                 value={mealName}
                 onChangeText={handleMealNameChange}
                 onFocus={() => {
-                  if (mealName.trim()) setShowSuggestions(true);
+                  if (mealName.trim() && foodSuggestions.length > 0) {
+                    setShowSuggestions(true);
+                  }
                 }}
-                placeholder="Type to search (e.g. Chicken, Rice, Apple, Egg)..."
+                placeholder="e.g. Nasi Goreng Kampung"
                 placeholderTextColor="#94A3B8"
-                style={{ borderWidth: 1, borderColor: c.line, borderRadius: 12, padding: 10, fontSize: 14, backgroundColor: '#FFFFFF', color: '#1E293B' }}
+                style={{
+                  borderWidth: 1,
+                  borderColor: c.line,
+                  borderRadius: 12,
+                  padding: 10,
+                  fontSize: 14,
+                  color: '#1E293B',
+                }}
               />
-
-              {showSuggestions && (
+              {isLoadingFoods && (
+                <Txt s={10} color={c.mute}>Loading local food suggestions...</Txt>
+              )}
+              {foodDatasetError && (
+                <Txt s={10} color="#EF4444">{foodDatasetError}</Txt>
+              )}
+              {showSuggestions && foodSuggestions.length > 0 && (
                 <View
                   style={{
                     position: 'absolute',
-                    top: '100%',
+                    top: 66,
                     left: 0,
                     right: 0,
-                    marginTop: 4,
-                    maxHeight: 220,
                     backgroundColor: '#FFFFFF',
                     borderWidth: 1,
                     borderColor: c.line,
-                    borderRadius: 14,
-                    boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
-                    zIndex: 9999,
-                    elevation: 50,
-                    overflow: 'hidden',
+                    borderRadius: 12,
+                    maxHeight: 160,
+                    zIndex: 50,
+                    boxShadow: '0 8px 20px rgba(0,0,0,0.12)',
                   }}
                 >
-                  {isLoadingFoods && (
-                    <View style={{ padding: 14, alignItems: 'center', justifyContent: 'center' }}>
-                      <Txt s={12} color={c.mute}>⏳ Loading dataset...</Txt>
-                    </View>
-                  )}
-
-                  {!isLoadingFoods && foodDatasetError && (
-                    <View style={{ padding: 14, alignItems: 'center', justifyContent: 'center' }}>
-                      <Txt s={12} color="#EF4444" style={{ textAlign: 'center' }}>
-                        ⚠️ Error loading dataset: {foodDatasetError}
-                      </Txt>
-                    </View>
-                  )}
-
-                  {!isLoadingFoods && !foodDatasetError && mealName.trim().length > 0 && foodSuggestions.length === 0 && (
-                    <View style={{ padding: 14, alignItems: 'center', justifyContent: 'center' }}>
-                      <Txt s={12} color={c.mute}>
-                        No results found for '{mealName.trim()}'
-                      </Txt>
-                    </View>
-                  )}
-
-                  {!isLoadingFoods && !foodDatasetError && foodSuggestions.length > 0 && (
-                    <ScrollView style={{ maxHeight: 200 }} nestedScrollEnabled>
-                      {foodSuggestions.map((item) => (
-                        <Pressable
-                          key={item.id}
-                          onPress={() => handleSelectFood(item)}
-                          style={({ hovered }: any) => ({
-                            paddingVertical: 10,
-                            paddingHorizontal: 12,
-                            borderBottomWidth: 1,
-                            borderBottomColor: c.line,
-                            backgroundColor: hovered ? '#F3F4F6' : '#FFFFFF',
-                            cursor: 'pointer',
-                          })}
-                        >
-                          <Row style={{ alignItems: 'center', gap: 10 }}>
-                            {item.image_url ? (
-                              <Image
-                                source={{ uri: item.image_url }}
-                                style={{ width: 36, height: 36, borderRadius: 8, backgroundColor: '#E5E7EB' }}
-                              />
-                            ) : null}
-                            <View style={{ flex: 1 }}>
-                              <Row style={{ justifyContent: 'space-between', alignItems: 'center' }}>
-                                <Txt s={13} w="700" style={{ flex: 1, marginRight: 8 }} numberOfLines={1}>
-                                  {item.source === 'malaysian' ? '🇲🇾 ' : ''}{item.name}
-                                </Txt>
-                                <Txt s={12} w="800" color="#EAB308">
-                                  {item.calories} kcal
-                                </Txt>
-                              </Row>
-                              <Txt s={10} color={c.mute} style={{ marginTop: 2 }}>
-                                Per {item.serving_size} · P: {item.protein_g}g · C: {item.carbs_g}g · F: {item.fat_g}g
-                              </Txt>
-                            </View>
-                          </Row>
-                        </Pressable>
-                      ))}
-                    </ScrollView>
-                  )}
+                  <ScrollView style={{ maxHeight: 160 }}>
+                    {foodSuggestions.map((food, index) => (
+                      <Pressable
+                        key={`${food.name}-${index}`}
+                        onPress={() => handleSelectFood(food)}
+                        style={{
+                          paddingHorizontal: 12,
+                          paddingVertical: 8,
+                          borderBottomWidth: index < foodSuggestions.length - 1 ? 1 : 0,
+                          borderColor: '#F1F5F9',
+                        }}
+                      >
+                        <Txt s={12} w="700">{food.name}</Txt>
+                        <Txt s={10} color={c.mute}>
+                          {food.calories} kcal · P {food.protein_g}g · C {food.carbs_g}g · F {food.fat_g}g
+                        </Txt>
+                      </Pressable>
+                    ))}
+                  </ScrollView>
                 </View>
               )}
             </View>
 
-            <View style={{ gap: 6 }}>
-              <Txt s={12} color={c.mute}>Category</Txt>
-              <Row style={{ gap: 6 }}>
-                {(['Breakfast', 'Lunch', 'Dinner', 'Snacks'] as const).map((cat) => (
-                  <Pressable
-                    key={cat}
-                    onPress={() => setMealCategory(cat)}
-                    style={{
-                      flex: 1,
-                      paddingVertical: 8,
-                      borderRadius: 10,
-                      backgroundColor: mealCategory === cat ? c.yellow : c.bg,
-                      borderWidth: 1,
-                      borderColor: mealCategory === cat ? c.ink : 'transparent',
-                      alignItems: 'center',
-                    }}
-                  >
-                    <Txt s={11} w={mealCategory === cat ? '700' : '500'}>{cat}</Txt>
-                  </Pressable>
-                ))}
-              </Row>
-            </View>
+            <Row style={{ gap: 6 }}>
+              {(['Breakfast', 'Lunch', 'Dinner', 'Snacks'] as const).map((cat) => (
+                <Pressable
+                  key={cat}
+                  onPress={() => setMealCategory(cat)}
+                  style={{
+                    flex: 1,
+                    paddingVertical: 7,
+                    borderRadius: 10,
+                    alignItems: 'center',
+                    backgroundColor: mealCategory === cat ? c.blue : '#F1F5F9',
+                  }}
+                >
+                  <Txt s={11} w={mealCategory === cat ? '800' : '600'}>{cat}</Txt>
+                </Pressable>
+              ))}
+            </Row>
 
-            <View style={{ gap: 4 }}>
+            <View style={{ gap: 6 }}>
               <Txt s={12} color={c.mute}>Calories (kcal)</Txt>
               <TextInput
                 value={mealKcal}
                 onChangeText={setMealKcal}
                 inputMode="numeric"
-                placeholder="e.g. 520"
+                placeholder="450"
                 placeholderTextColor="#94A3B8"
-                style={{ borderWidth: 1, borderColor: c.line, borderRadius: 12, padding: 10, fontSize: 14, color: '#1E293B' }}
+                style={{
+                  borderWidth: 1,
+                  borderColor: c.line,
+                  borderRadius: 12,
+                  padding: 10,
+                  fontSize: 14,
+                  color: '#1E293B',
+                }}
               />
             </View>
 
@@ -1351,7 +1331,14 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
                   inputMode="decimal"
                   placeholder="25"
                   placeholderTextColor="#94A3B8"
-                  style={{ borderWidth: 1, borderColor: c.line, borderRadius: 10, padding: 8, fontSize: 13, color: '#1E293B' }}
+                  style={{
+                    borderWidth: 1,
+                    borderColor: c.line,
+                    borderRadius: 10,
+                    padding: 8,
+                    fontSize: 13,
+                    color: '#1E293B',
+                  }}
                 />
               </View>
               <View style={{ flex: 1, gap: 4 }}>
@@ -1362,7 +1349,14 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
                   inputMode="decimal"
                   placeholder="55"
                   placeholderTextColor="#94A3B8"
-                  style={{ borderWidth: 1, borderColor: c.line, borderRadius: 10, padding: 8, fontSize: 13, color: '#1E293B' }}
+                  style={{
+                    borderWidth: 1,
+                    borderColor: c.line,
+                    borderRadius: 10,
+                    padding: 8,
+                    fontSize: 13,
+                    color: '#1E293B',
+                  }}
                 />
               </View>
               <View style={{ flex: 1, gap: 4 }}>
@@ -1373,7 +1367,14 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
                   inputMode="decimal"
                   placeholder="14"
                   placeholderTextColor="#94A3B8"
-                  style={{ borderWidth: 1, borderColor: c.line, borderRadius: 10, padding: 8, fontSize: 13, color: '#1E293B' }}
+                  style={{
+                    borderWidth: 1,
+                    borderColor: c.line,
+                    borderRadius: 10,
+                    padding: 8,
+                    fontSize: 13,
+                    color: '#1E293B',
+                  }}
                 />
               </View>
             </Row>
