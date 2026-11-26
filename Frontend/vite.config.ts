@@ -49,6 +49,9 @@ function cloudflareQuickTunnel(): Plugin {
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), tailwindcss(), cloudflareQuickTunnel()],
+  optimizeDeps: {
+    exclude: ['@tensorflow/tfjs'],
+  },
   resolve: {
     alias: {
       '@': path.resolve(import.meta.dirname, './src'),

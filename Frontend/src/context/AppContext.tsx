@@ -131,6 +131,7 @@ interface AppContextType {
   editingMeal: MealItem | null;
   setEditingMeal: (meal: MealItem | null) => void;
   addWater: (amount?: number) => void;
+  logWorkout?: (minutes: number, kcalBurned: number, label?: string) => Promise<void>;
 
   logMeal: (meal: Omit<MealItem, 'id' | 'logged'>) => Promise<void>;
   updateMeal: (id: string, updatedFields: Partial<MealItem>) => Promise<{ success: boolean; error?: string }>;
@@ -308,6 +309,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [waterMl, setWaterMl] = useState<number>(initialDay.water);
   const [stepsCount, setStepsCount] = useState<number>(initialDay.steps);
   const [workoutMins, setWorkoutMins] = useState<number>(initialDay.workout);
+  const [workoutLabel, setWorkoutLabel] = useState<string>(initialDay.workoutLabel || 'Afternoon strength');
+  const [weightLogs, setWeightLogs] = useState<WeightLog[]>([]);
 
 
   // Toast
@@ -845,16 +848,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Log Weight Action (updates currentWeight, BMI, weightHistory, and Supabase weight_logs)
+  // Log Weight Action (updates currentWeight, BMI, weightHistory, weightLogs, and Supabase)
   const logWeight = async (weightKg: number, note?: string) => {
     const cleanWeight = Math.round(Number(weightKg) * 10) / 10;
-    if (!cleanWeight || cleanWeight <= 0) return;
+    if (!cleanWeight || cleanWeight <= 0) return { success: false, error: 'Invalid weight' };
 
     const tempId = `w_${Date.now()}`;
+    const nowIso = new Date().toISOString();
     const newEntry: WeightLogItem = {
       id: tempId,
       weightKg: cleanWeight,
-      recordedAt: new Date().toISOString(),
+      recordedAt: nowIso,
       note: note?.trim() || null,
     };
 
@@ -879,41 +883,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
       );
     } catch {}
 
-    showToast(`⚖️ Weight updated to ${cleanWeight.toFixed(1)} kg`);
-
-    if (isSupabaseConfigured && userId) {
-      try {
-        const { data, error } = await supabase
-          .from('weight_logs')
-          .insert({
-            user_id: userId,
-            weight_kg: cleanWeight,
-            note: note?.trim() || null,
-            recorded_at: newEntry.recordedAt,
-          })
-          .select()
-          .single();
-
-        if (!error && data) {
-          setWeightHistory((prev) => {
-            const updated = prev.map((item) =>
-              item.id === tempId ? { ...item, id: data.id } : item
-            );
-            try {
-              localStorage.setItem('caloriesnap_weight_history', JSON.stringify(updated));
-            } catch {}
-            return updated;
-          });
-        }
-
-        await supabase
-          .from('profiles')
-          .update({ current_weight_kg: cleanWeight, updated_at: new Date().toISOString() })
-          .eq('id', userId);
-      } catch (err) {
-        console.warn('Failed to save weight log to Supabase:', err);
-      }
+    const res = await weightService.logWeight(userId || 'local_user', cleanWeight, note);
+    if (res.success && res.data) {
+      setWeightLogs((prev) => {
+        const withoutOld = prev.filter((l) => l.id !== res.data!.id);
+        const updated = [...withoutOld, res.data!].sort(
+          (a, b) => new Date(a.recorded_at).getTime() - new Date(b.recorded_at).getTime()
+        );
+        return updated;
+      });
+      setWeightHistory((prev) =>
+        prev.map((item) => (item.id === tempId ? { ...item, id: res.data!.id } : item))
+      );
+      showToast(`⚖️ Weight logged: ${cleanWeight.toFixed(1)} kg`);
+    } else {
+      showToast(`⚖️ Weight updated to ${cleanWeight.toFixed(1)} kg`);
     }
+    return res;
   };
 
   // Log Workout Action
@@ -1140,36 +1126,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return logs;
   };
 
-  const logWeight = async (weightKg: number, note?: string) => {
-    const rounded = Math.round(weightKg * 10) / 10;
-    setCurrentWeight(rounded);
-    const hM = (userHeightCm || 165) / 100;
-    const calculatedBmi = Math.round((rounded / (hM * hM)) * 10) / 10;
-    if (calculatedBmi > 10 && calculatedBmi < 60) setBmi(calculatedBmi);
-
-    const res = await weightService.logWeight(userId || 'local_user', rounded, note);
-    if (res.success && res.data) {
-      setWeightLogs((prev) => {
-        const withoutOld = prev.filter((l) => l.id !== res.data!.id);
-        const updated = [...withoutOld, res.data!].sort(
-          (a, b) => new Date(a.recorded_at).getTime() - new Date(b.recorded_at).getTime()
-        );
-        return updated;
-      });
-      showToast(`⚖️ Weight logged: ${rounded} kg`);
-    } else {
-      showToast(`⚖️ Weight logged: ${rounded} kg (local)`);
-    }
-    return res;
-  };
-
   const deleteWeightLog = async (id: string) => {
-    const res = await weightService.deleteWeightLog(id, userId || '');
-    if (res.success) {
+    const ok = await weightService.deleteWeightLog(id, userId || '');
+    if (ok) {
       setWeightLogs((prev) => prev.filter((l) => l.id !== id));
       showToast('Weight log deleted.');
+      return { success: true };
     }
-    return res;
+    return { success: false, error: 'Failed to delete weight log' };
   };
 
   // Profile Update Action
@@ -1396,6 +1360,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         stepsCount,
         workoutMins,
         workoutLabel,
+        logWorkout,
         todayMeals,
         capturedMeal,
         setCapturedMeal,

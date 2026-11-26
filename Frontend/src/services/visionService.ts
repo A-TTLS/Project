@@ -1,4 +1,3 @@
-import * as tf from '@tensorflow/tfjs';
 import { loadLocalFoods, type LocalFood } from './localFoodSearch';
 
 export interface VisionFoodItem {
@@ -30,9 +29,14 @@ const LOCAL_MODEL_PATH = '/food-model/model.json';
 const LOCAL_LABELS_PATH = '/food-model/labels.json';
 const LOCAL_CONFIDENCE_THRESHOLD = 0.75;
 
-// The installed tfjs bundle's declaration files omit some browser runtime exports.
-// Keep that boundary typed loosely while preserving the app-facing result types.
-const tfRuntime = tf as any;
+// Dynamic loader for tfjs if loaded via CDN or window
+async function getTfRuntime(): Promise<any> {
+  if (typeof window !== 'undefined' && (window as any).tf) {
+    return (window as any).tf;
+  }
+  return null;
+}
+
 let localModelPromise: Promise<any> | null = null;
 
 function normalizeFoodName(value: string): string {
@@ -41,6 +45,9 @@ function normalizeFoodName(value: string): string {
 
 async function recognizeWithLocalModel(dataUrl: string): Promise<VisionRecognitionResult | null> {
   try {
+    const tfRuntime = await getTfRuntime();
+    if (!tfRuntime) return null;
+
     localModelPromise ??= tfRuntime.loadLayersModel(LOCAL_MODEL_PATH);
     const model = await localModelPromise;
     const labelResponse = await fetch(LOCAL_LABELS_PATH);

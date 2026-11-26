@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { View, Pressable } from 'react-native-web';
 import { useApp } from '../context/AppContext';
+import CalorieIntakeChart from '../components/CalorieIntakeChart';
+import { WeightTrendCard } from '../components/WeightTrendCard';
 
 
 import {
@@ -99,7 +101,7 @@ export default function TrendScreen({
           {/* CALORIE INTAKE CHART (Member 5) */}
           <CalorieIntakeChart />
 
-                    {/* WEIGHT TREND GRAPH */}
+          {/* WEIGHT TREND GRAPH */}
           <WeightTrendCard
             currentWeight={currentWeight}
             targetWeight={targetWeight}
@@ -541,7 +543,6 @@ export default function TrendScreen({
         </>
 
       )}
-
 
     </Screen>
 

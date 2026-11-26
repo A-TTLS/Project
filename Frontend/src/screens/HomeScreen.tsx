@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Pressable, TextInput, ScrollView, Image } from 'react-native-web';
-
+import { useApp, type MealItem, type WeightLogItem } from '../context/AppContext';
 import { loadLocalFoods, searchLocalFoods, LocalFood } from '../services/localFoodSearch';
 import { EditMealModal } from '../components/EditMealModal';
 import { DeleteConfirmModal } from '../components/DeleteConfirmModal';
@@ -35,10 +35,6 @@ const QUICK_WORKOUT_TYPES = [
   'Running',
 ];
 
-/**
- * Estimates kcal/min based on workout type + user weight (falls back cleanly if weight is missing)
- * Uses MET-style rates: kcal = MET * weightKg * (minutes / 60)
- */
 function estimateWorkoutCalories(minutes: number, workoutType: string, weightKg = 55): number {
   const mins = Math.max(0, Number(minutes) || 0);
   if (mins <= 0) return 0;
@@ -46,7 +42,7 @@ function estimateWorkoutCalories(minutes: number, workoutType: string, weightKg 
   const label = (workoutType || '').toLowerCase();
   const safeWeight = Number(weightKg) > 0 ? Number(weightKg) : 55;
 
-  let met = 4.0; // default moderate activity
+  let met = 4.0;
   if (label.includes('push') || label.includes('strength') || label.includes('gym') || label.includes('weight')) {
     met = 4.5;
   } else if (label.includes('cycl') || label.includes('bike') || label.includes('spin')) {
@@ -153,13 +149,10 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
     workoutMins,
     todayMeals,
     addWater,
-
     logMeal,
     updateMeal,
     deleteMeal,
-    currentWeight,
-    targetWeight,
-    weightLogs,
+    weightLogs = [],
     logWeight,
     setEditingMeal,
     setCapturedMeal,
@@ -179,19 +172,13 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
   const [mealToEdit, setMealToEdit] = useState<MealItem | null>(null);
   const [mealToDelete, setMealToDelete] = useState<MealItem | null>(null);
 
-  // Water undo — remembers the last quick-add amount so undo subtracts it.
-  // Undo stays pressable as long as there is any water logged today (waterMl > 0).
-  const [lastWaterAdded, setLastWaterAdded] = useState<number>(250);
-  // Weight Modal State
   const [showWeightModal, setShowWeightModal] = useState(false);
   const [weightInputKg, setWeightInputKg] = useState('');
   const [weightInputNote, setWeightInputNote] = useState('');
 
-  // Steps Modal State
   const [showStepsModal, setShowStepsModal] = useState(false);
   const [stepsInput, setStepsInput] = useState('1500');
 
-  // Workout Modal State
   const [showWorkoutModal, setShowWorkoutModal] = useState(false);
   const [workoutInputMins, setWorkoutInputMins] = useState('30');
   const [workoutInputKcal, setWorkoutInputKcal] = useState(() =>
@@ -305,6 +292,21 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
   const [mealCarbs, setMealCarbs] = useState('');
   const [mealFat, setMealFat] = useState('');
 
+  // Base Nutritional Values for Live Recalculation (Task 1)
+  // Default base baseline: Nasi Lemak (520 kcal, 14g P, 68g C, 21g F per 1 plate)
+  const [baseNutrients, setBaseNutrients] = useState({
+    kcal: 520,
+    protein: 14,
+    carbs: 68,
+    fat: 21,
+    servingSize: '1 plate',
+  });
+  const [portionMode, setPortionMode] = useState<'fractions' | 'grams' | 'custom'>('fractions');
+  const [portionMultiplier, setPortionMultiplier] = useState<number>(1.0);
+  const [selectedFraction, setSelectedFraction] = useState<string>('1');
+  const [selectedGrams, setSelectedGrams] = useState<number | null>(null);
+  const [customServingText, setCustomServingText] = useState<string>('');
+
   // Food Search Dataset & Autocomplete State
   const [localFoods, setLocalFoods] = useState<LocalFood[]>([]);
   const [foodSuggestions, setFoodSuggestions] = useState<LocalFood[]>([]);
@@ -327,6 +329,46 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
       });
   }, []);
 
+  const recalculateFromBase = (mult: number) => {
+    const safeMult = Math.max(0.01, mult);
+    setPortionMultiplier(safeMult);
+    const newKcal = Math.round(baseNutrients.kcal * safeMult);
+    const newProtein = Math.round(baseNutrients.protein * safeMult * 10) / 10;
+    const newCarbs = Math.round(baseNutrients.carbs * safeMult * 10) / 10;
+    const newFat = Math.round(baseNutrients.fat * safeMult * 10) / 10;
+
+    setMealKcal(newKcal.toString());
+    setMealProtein(newProtein.toString());
+    setMealCarbs(newCarbs.toString());
+    setMealFat(newFat.toString());
+  };
+
+  const handleSelectFraction = (fractionLabel: string, mult: number) => {
+    setSelectedFraction(fractionLabel);
+    setSelectedGrams(null);
+    recalculateFromBase(mult);
+  };
+
+  const handleSelectGrams = (grams: number) => {
+    setSelectedGrams(grams);
+    setSelectedFraction('');
+    const mult = grams / 100;
+    recalculateFromBase(mult);
+  };
+
+  const handleCustomServingChange = (text: string) => {
+    setCustomServingText(text);
+  };
+
+  const portionDisplayLabel =
+    portionMode === 'fractions'
+      ? `${selectedFraction} serving (${portionMultiplier}x)`
+      : portionMode === 'grams'
+        ? `${selectedGrams || 100}g (${portionMultiplier}x)`
+        : customServingText.trim()
+          ? `${customServingText} (${portionMultiplier}x)`
+          : `${portionMultiplier}x serving`;
+
   const handleMealNameChange = (text: string) => {
     setMealName(text);
     if (!text.trim()) {
@@ -341,18 +383,27 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
 
   const handleSelectFood = (food: LocalFood) => {
     setMealName(food.name);
-    setMealKcal(food.calories.toString());
-    setMealProtein(food.protein_g.toString());
-    setMealCarbs(food.carbs_g.toString());
-    setMealFat(food.fat_g.toString());
+    const base = {
+      kcal: food.calories || 0,
+      protein: food.protein_g || 0,
+      carbs: food.carbs_g || 0,
+      fat: food.fat_g || 0,
+      servingSize: food.serving_size || '1 serving',
+    };
+    setBaseNutrients(base);
+
+    const mult = portionMultiplier || 1.0;
+    setMealKcal(Math.round(base.kcal * mult).toString());
+    setMealProtein((Math.round(base.protein * mult * 10) / 10).toString());
+    setMealCarbs((Math.round(base.carbs * mult * 10) / 10).toString());
+    setMealFat((Math.round(base.fat * mult * 10) / 10).toString());
     setShowSuggestions(false);
   };
 
-  const displayWorkoutMins = (Number(workoutMins) || 0) + localWorkoutMins;
-  const displayBurnedKcal = (Number(burnedKcal) || 0) + localBurnedKcal;
-
   const safeGoal = Math.max(1, Number(calorieGoal) || 2000);
   const safeConsumed = Math.max(0, Number(consumedKcal) || 0);
+  const displayWorkoutMins = (Number(workoutMins) || 0) + localWorkoutMins;
+  const displayBurnedKcal = (Number(burnedKcal) || 0) + localBurnedKcal;
   const safeBurned = Math.max(0, displayBurnedKcal);
   const remainingKcal = Math.max(0, Math.round(safeGoal - safeConsumed + safeBurned));
   const progressPct = Math.min(100, Math.round((safeConsumed / safeGoal) * 100));
@@ -390,19 +441,21 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
   });
 
   const handleQuickAddMeal = async () => {
-    if (!mealName.trim() || !mealKcal) {
-      showToast('⚠️ Please enter meal name and calories');
-      return;
-    }
+    const finalName = mealName.trim() || 'Nasi Lemak';
+    const finalKcal = mealKcal ? parseInt(mealKcal, 10) : 520;
+    const finalProtein = mealProtein ? parseFloat(mealProtein) : 14;
+    const finalCarbs = mealCarbs ? parseFloat(mealCarbs) : 68;
+    const finalFat = mealFat ? parseFloat(mealFat) : 21;
 
     await logMeal({
-      name: mealName.trim(),
+      name: finalName,
       category: mealCategory,
-      meta: `${mealCategory} · Logged`,
-      kcal: parseInt(mealKcal, 10) || 0,
-      protein: parseFloat(mealProtein) || 0,
-      carbs: parseFloat(mealCarbs) || 0,
-      fat: parseFloat(mealFat) || 0,
+      meta: `${mealCategory} · ${portionDisplayLabel} · Logged`,
+      kcal: finalKcal,
+      protein: finalProtein,
+      carbs: finalCarbs,
+      fat: finalFat,
+      portionMultiplier,
     });
 
     setShowAddMealModal(false);
@@ -411,6 +464,10 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
     setMealProtein('');
     setMealCarbs('');
     setMealFat('');
+    setCustomServingText('');
+    setPortionMultiplier(1.0);
+    setSelectedFraction('1');
+    setSelectedGrams(null);
   };
 
   return (
@@ -580,7 +637,7 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
           goalSteps={8000}
           workoutMins={workoutMins}
           burnedKcal={burnedKcal}
-          onUpdateSteps={updateSteps}
+          onUpdateSteps={(_steps: number) => {}}
         />
       </Row>
       {/* A Little Everyday Balance (2x2 Grid: Weight, Water, Steps, Workout) */}
@@ -765,14 +822,7 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
               style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginVertical: 8 }}
             >
               <svg width="52" height="52" viewBox="0 0 56 56" style={{ transform: 'rotate(-90deg)', flexShrink: 0 }}>
-                <circle
-                  cx="28"
-                  cy="28"
-                  r={ringRadius}
-                  fill="none"
-                  stroke="#B6DFAB"
-                  strokeWidth="5"
-                />
+                <circle cx="28" cy="28" r={ringRadius} fill="none" stroke="#B6DFAB" strokeWidth="5" />
                 <circle
                   cx="28"
                   cy="28"
@@ -904,10 +954,10 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
                       meal.category === 'Breakfast'
                         ? '#FFEFA0'
                         : meal.category === 'Lunch'
-                        ? '#DDF0D3'
-                        : meal.category === 'Dinner'
-                        ? '#D8EDF8'
-                        : '#FBDAD6',
+                          ? '#DDF0D3'
+                          : meal.category === 'Dinner'
+                            ? '#D8EDF8'
+                            : '#FBDAD6',
                     alignItems: 'center',
                     justifyContent: 'center',
                     flexShrink: 0,
@@ -946,12 +996,6 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
                     backgroundColor: '#F3F4F6',
                     cursor: 'pointer',
                   }}
-                  onPress={() => {
-                    setEditingMeal(meal);
-                    setCapturedMeal(null);
-                    onNavigate('Scan Result');
-                  }}
-                  style={{ padding: 4 }}
                 >
                   <Icon name="edit" size={15} color={c.ink} />
                 </Pressable>
@@ -1153,7 +1197,7 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
                 <Txt s={12} color={c.mute}>Calories Burned (auto/edit)</Txt>
                 <TextInput
                   value={workoutInputKcal}
-                  onChangeText={(val) => {
+                  onChangeText={(val: string) => {
                     setKcalManuallyEdited(true);
                     setWorkoutInputKcal(val);
                   }}
@@ -1207,8 +1251,8 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
                 onFocus={() => {
                   if (mealName.trim()) setShowSuggestions(true);
                 }}
-                placeholder="Type to search (e.g. Chicken, Rice, Apple, Egg)..."
-                placeholderTextColor="#94A3B8"
+                placeholder="e.g. Nasi Lemak"
+                placeholderTextColor="#9CA3AF"
                 style={{ borderWidth: 1, borderColor: c.line, borderRadius: 12, padding: 10, fontSize: 14, backgroundColor: '#FFFFFF', color: '#1E293B' }}
               />
 
@@ -1278,7 +1322,7 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
                             <View style={{ flex: 1 }}>
                               <Row style={{ justifyContent: 'space-between', alignItems: 'center' }}>
                                 <Txt s={13} w="700" style={{ flex: 1, marginRight: 8 }} numberOfLines={1}>
-                                  {item.source === 'malaysian' ? '🇲🇾 ' : ''}{item.name}
+                                  {item.name}
                                 </Txt>
                                 <Txt s={12} w="800" color="#EAB308">
                                   {item.calories} kcal
@@ -1295,6 +1339,192 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
                   )}
                 </View>
               )}
+            </View>
+
+            {/* Mobile-Friendly Scrollable Portion Picker (Task 1) */}
+            <View style={{ gap: 8, backgroundColor: '#F8FAFC', padding: 12, borderRadius: 14, borderWidth: 1, borderColor: '#E2E8F0' }}>
+              <Row style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+                <Txt s={12} w="700" color={c.ink}>Serving Size / Portion</Txt>
+
+                {/* Switcher: Fractions | Grams | Custom */}
+                <Row style={{ backgroundColor: '#E2E8F0', borderRadius: 8, padding: 2 }}>
+                  <Pressable
+                    onPress={() => setPortionMode('fractions')}
+                    style={{
+                      paddingHorizontal: 8,
+                      paddingVertical: 3,
+                      borderRadius: 6,
+                      backgroundColor: portionMode === 'fractions' ? '#FFFFFF' : 'transparent',
+                    }}
+                  >
+                    <Txt s={11} w={portionMode === 'fractions' ? '700' : '500'} color={portionMode === 'fractions' ? c.ink : c.mute}>
+                      Fractions
+                    </Txt>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => setPortionMode('grams')}
+                    style={{
+                      paddingHorizontal: 8,
+                      paddingVertical: 3,
+                      borderRadius: 6,
+                      backgroundColor: portionMode === 'grams' ? '#FFFFFF' : 'transparent',
+                    }}
+                  >
+                    <Txt s={11} w={portionMode === 'grams' ? '700' : '500'} color={portionMode === 'grams' ? c.ink : c.mute}>
+                      Grams (g)
+                    </Txt>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => setPortionMode('custom')}
+                    style={{
+                      paddingHorizontal: 8,
+                      paddingVertical: 3,
+                      borderRadius: 6,
+                      backgroundColor: portionMode === 'custom' ? '#FFFFFF' : 'transparent',
+                    }}
+                  >
+                    <Txt s={11} w={portionMode === 'custom' ? '700' : '500'} color={portionMode === 'custom' ? c.ink : c.mute}>
+                      Custom
+                    </Txt>
+                  </Pressable>
+                </Row>
+              </Row>
+
+              {/* Scrollable Snap Pills for Fractional Servings */}
+              {portionMode === 'fractions' && (
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ gap: 6, paddingVertical: 2, alignItems: 'center' }}
+                >
+                  {[
+                    { label: '1/8', mult: 0.125 },
+                    { label: '1/4', mult: 0.25 },
+                    { label: '1/2', mult: 0.5 },
+                    { label: '3/4', mult: 0.75 },
+                    { label: '1', mult: 1.0 },
+                    { label: '1.5', mult: 1.5 },
+                    { label: '2', mult: 2.0 },
+                  ].map((p) => {
+                    const isSelected = selectedFraction === p.label;
+                    return (
+                      <Pressable
+                        key={p.label}
+                        onPress={() => handleSelectFraction(p.label, p.mult)}
+                        style={{
+                          paddingHorizontal: 12,
+                          paddingVertical: 7,
+                          borderRadius: 10,
+                          backgroundColor: isSelected ? c.yellow : '#FFFFFF',
+                          borderWidth: 1,
+                          borderColor: isSelected ? c.ink : '#CBD5E1',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          minWidth: 48,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <Txt s={12} w={isSelected ? '800' : '600'} color={c.ink}>
+                          {p.label}
+                        </Txt>
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+              )}
+
+              {/* Scrollable Snap Pills for Gram Weights */}
+              {portionMode === 'grams' && (
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ gap: 6, paddingVertical: 2, alignItems: 'center' }}
+                >
+                  {[50, 100, 150, 200, 250, 300, 500].map((g) => {
+                    const isSelected = selectedGrams === g;
+                    return (
+                      <Pressable
+                        key={g}
+                        onPress={() => handleSelectGrams(g)}
+                        style={{
+                          paddingHorizontal: 12,
+                          paddingVertical: 7,
+                          borderRadius: 10,
+                          backgroundColor: isSelected ? c.yellow : '#FFFFFF',
+                          borderWidth: 1,
+                          borderColor: isSelected ? c.ink : '#CBD5E1',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          minWidth: 54,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <Txt s={12} w={isSelected ? '800' : '600'} color={c.ink}>
+                          {g}g
+                        </Txt>
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+              )}
+
+              {/* Custom Input Fallback */}
+              {portionMode === 'custom' && (
+                <Row style={{ gap: 8, alignItems: 'center' }}>
+                  <TextInput
+                    value={customServingText}
+                    onChangeText={handleCustomServingChange}
+                    placeholder="1 plate"
+                    placeholderTextColor="#9CA3AF"
+                    style={{
+                      flex: 1,
+                      borderWidth: 1,
+                      borderColor: c.line,
+                      borderRadius: 10,
+                      padding: 8,
+                      fontSize: 13,
+                      color: '#1E293B',
+                      backgroundColor: '#FFFFFF',
+                    }}
+                  />
+                  <View style={{ width: 120, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <TextInput
+                      value={portionMultiplier ? String(portionMultiplier) : ''}
+                      onChangeText={(val: string) => {
+                        const num = parseFloat(val);
+                        if (!isNaN(num) && num > 0) {
+                          setPortionMultiplier(num);
+                          recalculateFromBase(num);
+                        }
+                      }}
+                      inputMode="decimal"
+                      placeholder="1.0"
+                      placeholderTextColor="#9CA3AF"
+                      style={{
+                        flex: 1,
+                        borderWidth: 1,
+                        borderColor: c.line,
+                        borderRadius: 10,
+                        padding: 8,
+                        fontSize: 13,
+                        textAlign: 'center',
+                        color: '#1E293B',
+                        backgroundColor: '#FFFFFF',
+                      }}
+                    />
+                    <Txt s={11} color={c.mute}>x mult</Txt>
+                  </View>
+                </Row>
+              )}
+
+              <Row style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+                <Txt s={11} color={c.mute}>
+                  Portion: <Txt s={11} w="700" color={c.ink}>{portionDisplayLabel}</Txt>
+                </Txt>
+                <Txt s={11} color="#059669" w="700">
+                  ⚡ Live Recalculating
+                </Txt>
+              </Row>
             </View>
 
             <View style={{ gap: 6 }}>
@@ -1326,9 +1556,9 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
                 value={mealKcal}
                 onChangeText={setMealKcal}
                 inputMode="numeric"
-                placeholder="e.g. 520"
-                placeholderTextColor="#94A3B8"
-                style={{ borderWidth: 1, borderColor: c.line, borderRadius: 12, padding: 10, fontSize: 14, color: '#1E293B' }}
+                placeholder="520"
+                placeholderTextColor="#9CA3AF"
+                style={{ borderWidth: 1, borderColor: c.line, borderRadius: 12, padding: 10, fontSize: 14, color: '#1E293B', backgroundColor: '#FFFFFF' }}
               />
             </View>
 
@@ -1339,9 +1569,9 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
                   value={mealProtein}
                   onChangeText={setMealProtein}
                   inputMode="decimal"
-                  placeholder="25"
-                  placeholderTextColor="#94A3B8"
-                  style={{ borderWidth: 1, borderColor: c.line, borderRadius: 10, padding: 8, fontSize: 13, color: '#1E293B' }}
+                  placeholder="14"
+                  placeholderTextColor="#9CA3AF"
+                  style={{ borderWidth: 1, borderColor: c.line, borderRadius: 10, padding: 8, fontSize: 13, color: '#1E293B', backgroundColor: '#FFFFFF' }}
                 />
               </View>
               <View style={{ flex: 1, gap: 4 }}>
@@ -1350,9 +1580,9 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
                   value={mealCarbs}
                   onChangeText={setMealCarbs}
                   inputMode="decimal"
-                  placeholder="55"
-                  placeholderTextColor="#94A3B8"
-                  style={{ borderWidth: 1, borderColor: c.line, borderRadius: 10, padding: 8, fontSize: 13, color: '#1E293B' }}
+                  placeholder="68"
+                  placeholderTextColor="#9CA3AF"
+                  style={{ borderWidth: 1, borderColor: c.line, borderRadius: 10, padding: 8, fontSize: 13, color: '#1E293B', backgroundColor: '#FFFFFF' }}
                 />
               </View>
               <View style={{ flex: 1, gap: 4 }}>
@@ -1361,9 +1591,9 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
                   value={mealFat}
                   onChangeText={setMealFat}
                   inputMode="decimal"
-                  placeholder="14"
-                  placeholderTextColor="#94A3B8"
-                  style={{ borderWidth: 1, borderColor: c.line, borderRadius: 10, padding: 8, fontSize: 13, color: '#1E293B' }}
+                  placeholder="21"
+                  placeholderTextColor="#9CA3AF"
+                  style={{ borderWidth: 1, borderColor: c.line, borderRadius: 10, padding: 8, fontSize: 13, color: '#1E293B', backgroundColor: '#FFFFFF' }}
                 />
               </View>
             </Row>
