@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Pressable, TextInput, useWindowDimensions } from 'react-native-web';
-import { Card, Row, Txt, Btn, Icon, c } from '../ui';
+import { Card, Row, Txt, Btn, Icon, ModalOverlay, c } from '../ui';
 
 interface StepCounterCardProps {
   stepsCount: number;
@@ -98,7 +98,6 @@ export function StepCounterCard({
   // Derived metrics
   const distanceKm = (stepsCount * 0.00078).toFixed(2);
   const stepKcal = Math.round(stepsCount * 0.04);
-  const totalBurned = (burnedKcal || 0) + stepKcal;
   const progressRatio = Math.min(1, Math.max(0, stepsCount / goalSteps));
   const pct = Math.round((stepsCount / goalSteps) * 100);
 
@@ -151,7 +150,7 @@ export function StepCounterCard({
                 {stepsCount.toLocaleString()} <Txt s={11} color={c.mute}>steps</Txt>
               </Txt>
               <Txt s={11} color="#15803D" w="600" style={{ marginTop: 2, lineHeight: 15 }}>
-                {distanceKm} km · ~{stepKcal} kcal{workoutMins > 0 || totalBurned > stepKcal ? ` · ${totalBurned} total` : ''}
+                {distanceKm} km · ~{stepKcal} kcal
               </Txt>
             </View>
 
@@ -272,26 +271,14 @@ export function StepCounterCard({
       </Card>
 
       {/* Manual Step Log / Edit Modal */}
-      {showEditModal && (
-        <View
-          style={{
-            position: 'fixed' as any,
-            top: 0,
-            bottom: 0,
-            left: 0,
-            right: 0,
-            backgroundColor: 'rgba(15, 23, 42, 0.6)',
-            justifyContent: 'center',
-            alignItems: 'center',
-            padding: 14,
-            zIndex: 1000,
-          }}
-        >
+      <ModalOverlay visible={showEditModal}>
           <div
             className="cs-modal-pop"
             style={{
               width: '100%',
               maxWidth: 360,
+              maxHeight: '90vh',
+              overflowY: 'auto',
               backgroundColor: c.card,
               borderRadius: 22,
               padding: 20,
@@ -403,8 +390,7 @@ export function StepCounterCard({
               </Btn>
             </Row>
           </div>
-        </View>
-      )}
+      </ModalOverlay>
     </>
   );
 }

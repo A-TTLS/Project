@@ -25,6 +25,7 @@ import {
   Btn,
   TwoToneCalorieRing,
   Icon,
+  ModalOverlay,
   c,
 } from '../ui';
 
@@ -786,6 +787,28 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
             <Txt s={11} w="800" color="#5C362C">Log Workout</Txt>
           </Pressable>
         </Row>
+
+        {stepsCount > 0 && (
+          <Row
+            style={{
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: 6,
+              marginTop: 10,
+              paddingTop: 8,
+              borderTopWidth: 1,
+              borderColor: '#FECDD3',
+            }}
+          >
+            <Txt s={11} color="#7C2D12" w="600">
+              Daily Active Burn (Steps + Workout)
+            </Txt>
+            <Txt s={12} color="#5C362C" w="800">
+              {(safeBurned + Math.round(stepsCount * 0.04)).toLocaleString()} kcal
+            </Txt>
+          </Row>
+        )}
       </Card>
 
       {/* ─── Weight Trend Graph (PR #14) ─── */}
@@ -938,8 +961,7 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
       </View>
 
       {/* ─── Quick Log Workout Modal (PR #11) ─── */}
-      {showWorkoutModal && (
-        <View style={{ position: 'fixed' as any, top: 0, bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(15, 23, 42, 0.6)', justifyContent: 'center', alignItems: 'center', padding: 14, zIndex: 999 }}>
+      <ModalOverlay visible={showWorkoutModal}>
           <div
             className="cs-modal-pop"
             style={{
@@ -1031,12 +1053,10 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
               </Btn>
             </ScrollView>
           </div>
-        </View>
-      )}
+      </ModalOverlay>
 
       {/* ─── Manual Add Meal Modal ─── */}
-      {showAddMealModal && (
-        <View style={{ position: 'fixed' as any, top: 0, bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(15, 23, 42, 0.6)', justifyContent: 'center', alignItems: 'center', padding: 14, zIndex: 999 }}>
+      <ModalOverlay visible={showAddMealModal}>
           <div
             className="cs-modal-pop"
             style={{
@@ -1181,12 +1201,10 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
               </Btn>
             </ScrollView>
           </div>
-        </View>
-      )}
+      </ModalOverlay>
 
       {/* ─── Manual Target Setting Modal (SCRUM-15: Set Own Target Manually) ─── */}
-      {showTargetModal && (
-        <View style={{ position: 'fixed' as any, top: 0, bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(15, 23, 42, 0.6)', justifyContent: 'center', alignItems: 'center', padding: 14, zIndex: 9999 }}>
+      <ModalOverlay visible={showTargetModal}>
           <div
             className="cs-modal-pop"
             style={{
@@ -1359,8 +1377,7 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
               </Btn>
             </ScrollView>
           </div>
-        </View>
-      )}
+      </ModalOverlay>
 
       {/* ─── Edit Meal Modal (PR #14) ─── */}
       {mealToEdit && (

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Pressable } from 'react-native-web';
 import { type MealItem } from '../context/AppContext';
-import { Row, Txt, Btn, Icon, c } from '../ui';
+import { Row, Txt, Btn, Icon, ModalOverlay, c } from '../ui';
 
 interface DeleteConfirmModalProps {
   meal: MealItem | null;
@@ -26,20 +26,7 @@ export function DeleteConfirmModal({ meal, isOpen, onClose, onConfirm }: DeleteC
   };
 
   return (
-    <View
-      style={{
-        position: 'fixed' as any,
-        top: 0,
-        bottom: 0,
-        left: 0,
-        right: 0,
-        backgroundColor: 'rgba(0,0,0,0.65)',
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: 16,
-        zIndex: 1000,
-      }}
-    >
+    <ModalOverlay visible={isOpen && Boolean(meal)}>
       <View
         style={{
           width: '100%',
@@ -118,6 +105,6 @@ export function DeleteConfirmModal({ meal, isOpen, onClose, onConfirm }: DeleteC
           </Pressable>
         </Row>
       </View>
-    </View>
+    </ModalOverlay>
   );
 }
