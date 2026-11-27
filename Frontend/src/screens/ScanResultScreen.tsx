@@ -14,6 +14,29 @@ interface NutritionChoice extends VisionFoodItem {
   key: string;
 }
 
+const PORTIONS = [
+  { label: '1/4', mult: 0.25 },
+  { label: '1/3', mult: 1 / 3 },
+  { label: '1/2', mult: 0.5 },
+  { label: '1x', mult: 1.0 },
+  { label: '1.5x', mult: 1.5 },
+  { label: '2x', mult: 2.0 },
+] as const;
+
+function getInitialPortionIndex(savedMultiplier?: number): number {
+  if (savedMultiplier === undefined || savedMultiplier === null) return 3; // 1x default
+  let bestIdx = 3;
+  let minDiff = Infinity;
+  PORTIONS.forEach((p, idx) => {
+    const diff = Math.abs(p.mult - savedMultiplier);
+    if (diff < minDiff) {
+      minDiff = diff;
+      bestIdx = idx;
+    }
+  });
+  return bestIdx;
+}
+
 function RetakeButton({ label, onPress, marginTop = 0 }: { label: string; onPress: () => void; marginTop?: number }) {
   return (
     <Pressable
@@ -46,7 +69,13 @@ export default function ScanResultScreen({ onNavigate }: ScanResultScreenProps) 
   const { logMeal, updateMeal, showToast, userId, capturedMeal, editingMeal, setEditingMeal, setCapturedMeal } = useApp();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [category, setCategory] = useState<'Breakfast' | 'Lunch' | 'Dinner' | 'Snacks'>('Lunch');
-  const [portionIndex, setPortionIndex] = useState(1);
+  const [portionIndex, setPortionIndex] = useState(3); // 1x default
+  const [baseKcal, setBaseKcal] = useState<number>(0);
+  const [baseProtein, setBaseProtein] = useState<number>(0);
+  const [baseCarbs, setBaseCarbs] = useState<number>(0);
+  const [baseFat, setBaseFat] = useState<number>(0);
+  const [calorieInput, setCalorieInput] = useState<string>('0');
+  const [isCalorieFocused, setIsCalorieFocused] = useState<boolean>(false);
   const [shareSocial, setShareSocial] = useState(true);
   const [mealName, setMealName] = useState('');
   const [selectedItemIndex, setSelectedItemIndex] = useState(0);
@@ -74,21 +103,76 @@ export default function ScanResultScreen({ onNavigate }: ScanResultScreenProps) 
   }, [visionResult, capturedMeal?.name, editingMeal]);
 
   const activeItem = choices[selectedItemIndex] ?? choices[0];
-  const multipliers = [0.5, 1, 1.5];
-  const mult = multipliers[portionIndex] ?? 1;
 
   useEffect(() => {
     setSelectedItemIndex(0);
-    const savedMultiplier = editingMeal?.portionMultiplier || 1;
-    setPortionIndex(savedMultiplier === 0.5 ? 0 : savedMultiplier === 1.5 ? 2 : 1);
+    const savedMultiplier = editingMeal?.portionMultiplier;
+    const initialIdx = getInitialPortionIndex(savedMultiplier);
+    setPortionIndex(initialIdx);
     setMealName(editingMeal?.name || visionResult?.meal_title || capturedMeal?.name || '');
     if (editingMeal) setCategory(editingMeal.category);
   }, [capturedMeal, visionResult?.meal_title, editingMeal]);
 
-  const currentKcal = Math.round((Number(activeItem?.calories) || 0) * mult);
-  const currentProtein = Math.round((Number(activeItem?.protein_g) || 0) * mult);
-  const currentCarbs = Math.round((Number(activeItem?.carbs_g) || 0) * mult);
-  const currentFat = Math.round((Number(activeItem?.fat_g) || 0) * mult);
+  useEffect(() => {
+    if (!activeItem) return;
+    const itemKcal = Number(activeItem.calories) || 0;
+    const itemProtein = Number(activeItem.protein_g) || 0;
+    const itemCarbs = Number(activeItem.carbs_g) || 0;
+    const itemFat = Number(activeItem.fat_g) || 0;
+
+    setBaseKcal(itemKcal);
+    setBaseProtein(itemProtein);
+    setBaseCarbs(itemCarbs);
+    setBaseFat(itemFat);
+
+    const mult = PORTIONS[portionIndex]?.mult ?? 1;
+    setCalorieInput(String(Math.round(itemKcal * mult)));
+  }, [selectedItemIndex, activeItem?.key]);
+
+  const handleSelectPortion = (index: number) => {
+    setPortionIndex(index);
+    const mult = PORTIONS[index]?.mult ?? 1;
+    const newKcal = Math.round(baseKcal * mult);
+    setCalorieInput(String(newKcal));
+  };
+
+  const handleCalorieChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value;
+    setCalorieInput(raw);
+
+    const val = parseFloat(raw);
+    if (!isNaN(val) && val >= 0) {
+      const currentMult = PORTIONS[portionIndex]?.mult ?? 1;
+      const prevTotal = baseKcal * currentMult;
+
+      const newBaseKcal = currentMult > 0 ? val / currentMult : val;
+      setBaseKcal(newBaseKcal);
+
+      if (prevTotal > 0 && val > 0) {
+        const ratio = val / prevTotal;
+        setBaseProtein((prev) => prev * ratio);
+        setBaseCarbs((prev) => prev * ratio);
+        setBaseFat((prev) => prev * ratio);
+      }
+    }
+  };
+
+  const handleCalorieBlur = () => {
+    setIsCalorieFocused(false);
+    const val = parseFloat(calorieInput);
+    const currentMult = PORTIONS[portionIndex]?.mult ?? 1;
+    if (isNaN(val) || val < 0) {
+      setCalorieInput(String(Math.round(baseKcal * currentMult)));
+    } else {
+      setCalorieInput(String(Math.round(val)));
+    }
+  };
+
+  const currentMult = PORTIONS[portionIndex]?.mult ?? 1;
+  const currentKcal = Math.max(0, parseInt(calorieInput, 10) || Math.round(baseKcal * currentMult));
+  const currentProtein = Math.round(baseProtein * currentMult);
+  const currentCarbs = Math.round(baseCarbs * currentMult);
+  const currentFat = Math.round(baseFat * currentMult);
 
   const handleLog = async () => {
     if ((!capturedMeal && !editingMeal) || visionResult?.is_food === false || !activeItem) {
@@ -124,7 +208,7 @@ export default function ScanResultScreen({ onNavigate }: ScanResultScreenProps) 
       fat: currentFat,
       image: finalImageUrl,
       imageUrl: finalImageUrl,
-      portionMultiplier: mult,
+      portionMultiplier: currentMult,
     };
     if (editingMeal) await updateMeal(editingMeal.id, mealFields);
     else await logMeal(mealFields);
@@ -271,10 +355,58 @@ export default function ScanResultScreen({ onNavigate }: ScanResultScreenProps) 
         </Row>
       </View>
 
-      <Row style={{ alignItems: 'baseline', marginVertical: 4 }}>
-        <Txt s={44} w="800">{currentKcal}</Txt>
-        <Txt s={16} color={c.mute} style={{ marginLeft: 8 }}>kcal</Txt>
-      </Row>
+      <View style={{ marginVertical: 6 }}>
+        <Row style={{ alignItems: 'center', gap: 12 }}>
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: '#FAF8F2',
+              borderRadius: 16,
+              borderWidth: 1.5,
+              borderColor: isCalorieFocused ? '#F59E0B' : '#E2E8F0',
+              paddingHorizontal: 14,
+              paddingVertical: 4,
+              boxShadow: isCalorieFocused ? '0 0 0 3px rgba(245, 158, 11, 0.2)' : 'none',
+            }}
+          >
+            <input
+              type="number"
+              inputMode="numeric"
+              min="0"
+              value={calorieInput}
+              onChange={handleCalorieChange}
+              onFocus={() => setIsCalorieFocused(true)}
+              onBlur={handleCalorieBlur}
+              aria-label="Calories (kcal)"
+              style={{
+                fontSize: 38,
+                fontWeight: '800',
+                color: '#1E293B',
+                backgroundColor: 'transparent',
+                border: 'none',
+                outline: 'none',
+                width: Math.max(76, (calorieInput.length + 1) * 22),
+                maxWidth: 160,
+                padding: 0,
+                margin: 0,
+                fontFamily: 'inherit',
+              }}
+            />
+            <Txt s={16} w="700" color="#64748B" style={{ marginLeft: 6 }}>
+              kcal
+            </Txt>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Txt s={11} w="700" color="#94A3B8" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>
+              Tap to edit
+            </Txt>
+            <Txt s={11} color="#64748B">
+              Scales with portion below
+            </Txt>
+          </View>
+        </Row>
+      </View>
       <Txt s={12} color={c.mute} style={{ marginBottom: 12 }}>
         {activeItem?.portion_estimate} · {activeItem?.cooking_method} · {activeItem?.sauce_or_gravy}
       </Txt>
@@ -294,16 +426,47 @@ export default function ScanResultScreen({ onNavigate }: ScanResultScreenProps) 
       </Row>
 
       <SectionHead title="Your portion" right="Select actual intake" />
-      <Row style={{ gap: 8 }}>
-        {[['Small', '0.5x'], ['Standard', '1.0x'], ['Large', '1.5x']].map(([label, scale], index) => (
-          <Pressable key={label} onPress={() => setPortionIndex(index)} style={{ flex: 1, cursor: 'pointer' as const }}>
-            <Card bg={portionIndex === index ? c.yellow : c.card} style={{ alignItems: 'center', paddingVertical: 14, borderColor: portionIndex === index ? c.ink : c.line }}>
-              <Txt w="700">{label}</Txt>
-              <Txt s={11} color={c.mute} style={{ marginTop: 2 }}>{scale}</Txt>
-            </Card>
-          </Pressable>
-        ))}
-      </Row>
+      <View
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(6, minmax(0, 1fr))',
+          gap: 6,
+          width: '100%',
+          marginTop: 4,
+        }}
+      >
+        {PORTIONS.map((p, idx) => {
+          const isActive = portionIndex === idx;
+          return (
+            <Pressable
+              key={p.label}
+              onPress={() => handleSelectPortion(idx)}
+              style={({ pressed }: { pressed: boolean }) => ({
+                paddingVertical: 8,
+                paddingHorizontal: 4,
+                borderRadius: 10,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: isActive ? '#FDE68A' : '#FFFFFF',
+                borderWidth: 1.5,
+                borderColor: isActive ? '#F59E0B' : '#E2E8F0',
+                cursor: 'pointer' as const,
+                transform: [{ scale: pressed ? 0.95 : 1 }],
+                boxShadow: isActive ? '0 1px 3px rgba(245, 158, 11, 0.25)' : 'none',
+              })}
+            >
+              <Txt
+                s={13}
+                w={isActive ? '800' : '600'}
+                color={isActive ? '#1E293B' : '#64748B'}
+                style={{ textAlign: 'center' }}
+              >
+                {p.label}
+              </Txt>
+            </Pressable>
+          );
+        })}
+      </View>
 
       <Card style={{ marginVertical: 18 }}>
         <Row style={{ justifyContent: 'space-between', alignItems: 'center' }}>

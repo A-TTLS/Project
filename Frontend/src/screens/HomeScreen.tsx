@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Pressable, TextInput, ScrollView, Image, useWindowDimensions } from 'react-native-web';
-import { useApp, WeightLogItem } from '../context/AppContext';
+import { useApp, MealItem, WeightLogItem } from '../context/AppContext';
 import { loadLocalFoods, searchLocalFoods, LocalFood } from '../services/localFoodSearch';
 import {
   Screen,
@@ -348,6 +348,21 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
   const [mealCarbs, setMealCarbs] = useState('');
   const [mealFat, setMealFat] = useState('');
 
+  // Delete Meal Confirmation State
+  const [mealToDelete, setMealToDelete] = useState<MealItem | null>(null);
+  const [isDeletingMeal, setIsDeletingMeal] = useState(false);
+
+  const handleConfirmDeleteMeal = async () => {
+    if (!mealToDelete) return;
+    setIsDeletingMeal(true);
+    try {
+      await deleteMeal(mealToDelete.id);
+    } finally {
+      setIsDeletingMeal(false);
+      setMealToDelete(null);
+    }
+  };
+
   // Food Search Dataset & Autocomplete State
   const [localFoods, setLocalFoods] = useState<LocalFood[]>([]);
   const [foodSuggestions, setFoodSuggestions] = useState<LocalFood[]>([]);
@@ -460,7 +475,7 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
     <Screen
       tab="Home"
       onSelectTab={onNavigate}
-      hideTabBar={showAddMealModal || showWorkoutModal || showWeightModal || showStepsModal}
+      hideTabBar={showAddMealModal || showWorkoutModal || showWeightModal || showStepsModal || !!mealToDelete}
     >
       {/* Top Header */}
       <Row style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
@@ -1382,6 +1397,96 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
             <Btn bg={c.yellow} onPress={handleQuickAddMeal} style={{ marginTop: 8 }}>
               Log Meal to Diary
             </Btn>
+          </View>
+        </View>
+      )}
+
+      {/* Delete Meal Confirmation Modal */}
+      {mealToDelete && (
+        <View
+          style={{
+            position: 'fixed' as any,
+            top: 0,
+            bottom: 0,
+            left: 0,
+            right: 0,
+            backgroundColor: 'rgba(0,0,0,0.65)',
+            justifyContent: 'center',
+            alignItems: 'center',
+            padding: 16,
+            zIndex: 1000,
+          }}
+        >
+          <View
+            style={{
+              width: '100%',
+              maxWidth: 380,
+              backgroundColor: c.card,
+              borderRadius: 24,
+              padding: 22,
+              gap: 16,
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+            }}
+          >
+            <Row style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+              <Row style={{ alignItems: 'center', gap: 10 }}>
+                <View
+                  style={{
+                    width: 38,
+                    height: 38,
+                    borderRadius: 12,
+                    backgroundColor: '#FEE2E2',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Icon name="trash" size={18} color="#DC2626" />
+                </View>
+                <Txt s={18} w="800">Delete Meal?</Txt>
+              </Row>
+              <Pressable
+                onPress={() => setMealToDelete(null)}
+                style={{ padding: 4, cursor: 'pointer' as any }}
+              >
+                <Icon name="close" size={20} color={c.mute} />
+              </Pressable>
+            </Row>
+
+            <Txt s={13} color="#4B5563" style={{ lineHeight: 19 }}>
+              Are you sure you want to delete <Txt w="700" color={c.ink}>"{mealToDelete.name}"</Txt> ({mealToDelete.kcal} kcal)?
+              This will remove it from your today's log and recalculate your daily totals.
+            </Txt>
+
+            <Row style={{ gap: 10, marginTop: 4 }}>
+              <Btn
+                bg={c.bg}
+                onPress={() => setMealToDelete(null)}
+                style={{
+                  flex: 1,
+                  height: 42,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: c.line,
+                }}
+              >
+                <Txt s={14} w="700" color={c.ink}>Cancel</Txt>
+              </Btn>
+              <Btn
+                bg="#DC2626"
+                onPress={handleConfirmDeleteMeal}
+                disabled={isDeletingMeal}
+                style={{
+                  flex: 1,
+                  height: 42,
+                  borderRadius: 12,
+                  opacity: isDeletingMeal ? 0.7 : 1,
+                }}
+              >
+                <Txt s={14} w="700" color="#FFFFFF">
+                  {isDeletingMeal ? 'Deleting...' : 'Delete'}
+                </Txt>
+              </Btn>
+            </Row>
           </View>
         </View>
       )}
